@@ -11,6 +11,8 @@
   --card: #ffffff;
   --maxw: 1080px;
   --ease: cubic-bezier(.22, .61, .36, 1);
+  /* macOS ships DIN Alternate / DIN Condensed; Inter is the web fallback */
+  --din: "DIN Alternate", "DIN Condensed", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -51,6 +53,7 @@ ul { list-style: none; margin: 0; padding: 0; }
   border-bottom: 1px solid var(--line);
   background: rgba(246, 245, 241, .85);
   backdrop-filter: blur(8px);
+  font-family: var(--din);
 }
 .topbar__inner {
   display: flex;
