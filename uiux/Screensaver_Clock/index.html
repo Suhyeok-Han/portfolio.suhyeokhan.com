@@ -308,6 +308,7 @@ function drawTexTri(ctx, img, s0,s1,s2, d0,d1,d2) {
   ctx.restore();
 }
 // 원근 워프: 이미지 src 사각형을 dst 사각형[TL,TR,BR,BL]에 매핑 (N×N 분할)
+// Safari는 분할 삼각형의 anti-aliasing 경계를 보여줄 수 있어 문에는 사용하지 않는다.
 function warpImage(ctx, img, sx,sy,sw,sh, quad, N) {
   const [TL,TR,BR,BL] = quad;
   const dpt = (u,v) => {
@@ -323,6 +324,26 @@ function warpImage(ctx, img, sx,sy,sw,sh, quad, N) {
     drawTexTri(ctx,img, s00,s10,s11, d00,d10,d11);
     drawTexTri(ctx,img, s00,s11,s01, d00,d11,d01);
   }
+}
+function drawImageInQuad(ctx, img, sx,sy,sw,sh, quad) {
+  const xs = quad.map(p => p[0]), ys = quad.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const dw = maxX - minX, dh = maxY - minY;
+  ctx.save();
+  applyPath(ctx, quad);
+  ctx.clip();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, sx,sy,sw,sh, minX,minY,dw,dh);
+  const shade = ctx.createLinearGradient(minX, minY, maxX, maxY);
+  shade.addColorStop(0, 'rgba(255,255,255,0.06)');
+  shade.addColorStop(0.55, 'rgba(0,0,0,0.04)');
+  shade.addColorStop(1, 'rgba(0,0,0,0.32)');
+  ctx.fillStyle = shade;
+  applyPath(ctx, quad);
+  ctx.fill();
+  ctx.restore();
 }
 
 // ── 유틸 ──────────────────────────────────────────────────────
@@ -482,12 +503,12 @@ function drawDoorThickness(shape) {
   structCtx.fillStyle = g; structCtx.fill();
   structCtx.restore();
 }
-// 문 — door.png(손잡이는 이미지에서 이미 제거됨)를 사다리꼴에 원근 워프.
+// 문 — Safari에서 삼각형 워프 경계가 보이지 않도록 단일 clipped image로 그린다.
 function drawDoor(shape) {
   const quad = [shape.TL, shape.TR, shape.BR, shape.BL];
   if (doorImg.complete && doorImg.naturalWidth) {
     const [l,t,r,b] = DOOR_BBOX;
-    warpImage(structCtx, doorImg, l, t, r-l, b-t, quad, 12);
+    drawImageInQuad(structCtx, doorImg, l, t, r-l, b-t, quad);
   } else {
     structCtx.save(); applyPath(structCtx, quad);
     structCtx.fillStyle = '#111'; structCtx.fill(); structCtx.restore();
@@ -531,11 +552,10 @@ function drawBall(min){
   ballCtx.clearRect(0,0,W,H);
   if (!yarnImg.complete || !yarnImg.naturalWidth) return;
   const cx = secCx();
-  const roll = -(W + BALL_R - cx) / BALL_R;        // 이동거리/반지름 = 구르는 회전
   const s = BALL_R / YARN_OBJ_R;                    // 객체 반지름 → BALL_R
   ballCtx.save();
   ballCtx.beginPath(); ballCtx.rect(0,0,W,SWEEP_BAR_H); ballCtx.clip();   // 상단 사각형 영역
-  ballCtx.translate(cx, BALL_Y); ballCtx.rotate(roll);
+  ballCtx.translate(cx, BALL_Y);
   // 이미지(alpha = 원형 누끼) — 객체 중심을 원점에 두고 그림
   ballCtx.drawImage(yarnImg, -YARN_C[0]*s, -YARN_C[1]*s, yarnImg.naturalWidth*s, yarnImg.naturalHeight*s);
   // 가운데로 갈수록 어둡게 — 공 픽셀 위에만 (source-atop)
