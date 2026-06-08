@@ -435,6 +435,15 @@ function getLightPolygons(min, shape) {
 // ── 바닥(floor) ───────────────────────────────────────────────
 // 빛 드는 영역엔 floor 텍스처가 보이고(multiply 로 약간 어둑), 그림자는 검정.
 const FLOOR_LIT = '#dcdcdc';   // 빛 영역 multiply 계수(밝을수록 floor 선명)
+function fillLightUnion(ctx, polys, fillStyle) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = fillStyle;
+  applyPath(ctx, polys.rightPoly); ctx.fill();
+  applyPath(ctx, polys.leftPoly);  ctx.fill();
+  if (polys.cornerTri) { applyPath(ctx, polys.cornerTri); ctx.fill(); }
+  ctx.restore();
+}
 function drawFloor(polys) {
   floorCtx.clearRect(0,0,W,H);
   floorCtx.fillStyle = '#000000';      // 기본 = 그림자(검정)
@@ -444,10 +453,7 @@ function drawFloor(polys) {
   // 빛마스크: 검정 바탕 + 빛 폴리곤은 회색
   lmCtx.clearRect(0,0,W,H);
   lmCtx.fillStyle = '#000000'; lmCtx.fillRect(0,0,W,H);
-  lmCtx.fillStyle = FLOOR_LIT;
-  applyPath(lmCtx, polys.rightPoly); lmCtx.fill();
-  applyPath(lmCtx, polys.leftPoly);  lmCtx.fill();
-  if (polys.cornerTri) { applyPath(lmCtx, polys.cornerTri); lmCtx.fill(); }
+  fillLightUnion(lmCtx, polys, FLOOR_LIT);
 
   // floor 이미지(cover) × 빛마스크 → 빛=floor 보임, 그림자=검정
   floorCtx.save();
@@ -463,26 +469,22 @@ function drawFloor(polys) {
 function drawGlow(polygons) {
   glowCtx.clearRect(0,0,W,H);
   if (!polygons) return;
-
-  const { rightPoly, leftPoly, cornerTri } = polygons;
+  lmCtx.clearRect(0,0,W,H);
+  fillLightUnion(lmCtx, polygons, '#bcbcbc');
 
   // 1단계: 넓게 번지는 부드러운 glow
   glowCtx.save();
   glowCtx.filter = 'blur(120px)';
-  glowCtx.fillStyle = 'rgba(188,188,188, 0.45)';
-  applyPath(glowCtx, rightPoly); glowCtx.fill();
-  applyPath(glowCtx, leftPoly);  glowCtx.fill();
-  if (cornerTri) { applyPath(glowCtx, cornerTri); glowCtx.fill(); }
+  glowCtx.globalAlpha = 0.45;
+  glowCtx.drawImage(lmCanvas, 0, 0);
   glowCtx.filter = 'none';
   glowCtx.restore();
 
   // 2단계: 경계선 바로 바깥 강한 glow
   glowCtx.save();
   glowCtx.filter = 'blur(40px)';
-  glowCtx.fillStyle = 'rgba(188,188,188, 0.3)';
-  applyPath(glowCtx, rightPoly); glowCtx.fill();
-  applyPath(glowCtx, leftPoly);  glowCtx.fill();
-  if (cornerTri) { applyPath(glowCtx, cornerTri); glowCtx.fill(); }
+  glowCtx.globalAlpha = 0.3;
+  glowCtx.drawImage(lmCanvas, 0, 0);
   glowCtx.filter = 'none';
   glowCtx.restore();
 }
@@ -537,14 +539,12 @@ function drawStruct(shape) {
 const SEC_PERIOD = 30000;       // 30초당 한 바퀴
 const SWEEP_BAR_H = 400;        // 상단 사각형 높이
 const BALL_R = 80;              // 공 반지름(px)
-const BALL_Y = SWEEP_BAR_H - BALL_R;   // 공 중심 y (바닥 가장자리에 닿게)
+const BALL_Y = SWEEP_BAR_H - BALL_R - 1;   // yarn 전체가 y<400 안에 머물도록 한다.
 const BALL_CENTER_DARK = 0.55;  // 가운데로 갈수록 어두운 그라디언트 진하기
 const BALL_SHADOW_DARK = 1.0;   // 바닥 그림자 진하기 (접점) — 기존 0.6 의 ~2배(100%↑)
 const BALL_SHADOW_STRETCH = 1.7;// 그림자 길이 배율
 const BALL_SHADOW_SIZE = 1.3;   // 그림자 크기 (30%↑)
-const YARN_ASSET_SCALE = 0.5;
-const YARN_C = [743 * YARN_ASSET_SCALE, 703 * YARN_ASSET_SCALE];
-const YARN_OBJ_R = 626 * YARN_ASSET_SCALE;   // yarn.png 의 원형 객체 중심·반지름
+const YARN_OBJ_R_RATIO = 626 / 1456;   // 원본 yarn.png 의 원형 객체 반지름 비율
 function secCx(){ const p=(Date.now()%SEC_PERIOD)/SEC_PERIOD; return (W+BALL_R) - p*(W+BALL_R*2); }
 
 // 공: 상단 opening(벽·문 제외)에서 굴러가며, 가운데로 갈수록 어두운 그라디언트.
@@ -552,12 +552,14 @@ function drawBall(min){
   ballCtx.clearRect(0,0,W,H);
   if (!yarnImg.complete || !yarnImg.naturalWidth) return;
   const cx = secCx();
-  const s = BALL_R / YARN_OBJ_R;                    // 객체 반지름 → BALL_R
+  const roll = -(W + BALL_R - cx) / BALL_R;         // 수평 이동거리만큼 회전
+  const s = BALL_R / (yarnImg.naturalWidth * YARN_OBJ_R_RATIO);
+  const iw = yarnImg.naturalWidth * s, ih = yarnImg.naturalHeight * s;
   ballCtx.save();
   ballCtx.beginPath(); ballCtx.rect(0,0,W,SWEEP_BAR_H); ballCtx.clip();   // 상단 사각형 영역
-  ballCtx.translate(cx, BALL_Y);
-  // 이미지(alpha = 원형 누끼) — 객체 중심을 원점에 두고 그림
-  ballCtx.drawImage(yarnImg, -YARN_C[0]*s, -YARN_C[1]*s, yarnImg.naturalWidth*s, yarnImg.naturalHeight*s);
+  ballCtx.translate(cx, BALL_Y); ballCtx.rotate(roll);
+  // 이미지(alpha = 원형 누끼) — 정사각형 중심을 회전축으로 잡아 위아래 흔들림을 막는다.
+  ballCtx.drawImage(yarnImg, -iw/2, -ih/2, iw, ih);
   // 가운데로 갈수록 어둡게 — 공 픽셀 위에만 (source-atop)
   ballCtx.globalCompositeOperation = 'source-atop';
   const g = ballCtx.createRadialGradient(0,0,0, 0,0,BALL_R);
@@ -596,7 +598,10 @@ function drawBallShadow(min){
   sweepCtx.beginPath(); sweepCtx.ellipse(0, -len/2, wid/2, len/2, 0, 0, Math.PI*2); sweepCtx.fill();
   sweepCtx.restore();
 }
-function drawSeconds(min){ drawBallShadow(min); drawBall(min); }
+function drawSeconds(min){
+  sweepCtx.clearRect(0,0,W,H);
+  drawBall(min);
+}
 
 // ── 나무 마네킹 (정각 표식) ───────────────────────────────────
 // 각 마네킹은 자기 정각(M12=0시, M1=1시 … M11=11시)에 "비추기 시작"하도록,
