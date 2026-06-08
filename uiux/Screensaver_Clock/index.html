@@ -535,16 +535,24 @@ function drawStruct(shape) {
   drawDoor(shape);
 }
 
-// ── 초침 = 굴러가는 공(실타래 이미지) + 바닥 그림자 (30초 주기, 우→좌) ──
+// ── 초침 = 굴러가는 공(실타래 이미지) (30초 주기, 우→좌) ──
 const SEC_PERIOD = 30000;       // 30초당 한 바퀴
 const SWEEP_BAR_H = 400;        // 상단 사각형 높이
 const BALL_R = 80;              // 공 반지름(px)
 const BALL_Y = SWEEP_BAR_H - BALL_R - 1;   // yarn 전체가 y<400 안에 머물도록 한다.
 const BALL_CENTER_DARK = 0.55;  // 가운데로 갈수록 어두운 그라디언트 진하기
-const BALL_SHADOW_DARK = 1.0;   // 바닥 그림자 진하기 (접점) — 기존 0.6 의 ~2배(100%↑)
-const BALL_SHADOW_STRETCH = 1.7;// 그림자 길이 배율
-const BALL_SHADOW_SIZE = 1.3;   // 그림자 크기 (30%↑)
-const YARN_OBJ_R_RATIO = 626 / 1456;   // 원본 yarn.png 의 원형 객체 반지름 비율
+const YARN_BBOX = { left: 59, top: 39, right: 683, bottom: 663 };
+const YARN_PIVOT = {
+  x: (YARN_BBOX.left + YARN_BBOX.right) / 2,
+  y: (YARN_BBOX.top + YARN_BBOX.bottom) / 2
+};
+const YARN_OBJ_R = Math.max(
+  YARN_BBOX.right - YARN_PIVOT.x,
+  YARN_BBOX.bottom - YARN_PIVOT.y
+);
+const YARN_SHADOW_ALPHA = 0.38;
+const YARN_SHADOW_LEN = 2.05;
+const YARN_SHADOW_WID = 0.72;
 function secCx(){ const p=(Date.now()%SEC_PERIOD)/SEC_PERIOD; return (W+BALL_R) - p*(W+BALL_R*2); }
 
 // 공: 상단 opening(벽·문 제외)에서 굴러가며, 가운데로 갈수록 어두운 그라디언트.
@@ -553,13 +561,13 @@ function drawBall(min){
   if (!yarnImg.complete || !yarnImg.naturalWidth) return;
   const cx = secCx();
   const roll = -(W + BALL_R - cx) / BALL_R;         // 수평 이동거리만큼 회전
-  const s = BALL_R / (yarnImg.naturalWidth * YARN_OBJ_R_RATIO);
+  const s = BALL_R / YARN_OBJ_R;
   const iw = yarnImg.naturalWidth * s, ih = yarnImg.naturalHeight * s;
   ballCtx.save();
   ballCtx.beginPath(); ballCtx.rect(0,0,W,SWEEP_BAR_H); ballCtx.clip();   // 상단 사각형 영역
   ballCtx.translate(cx, BALL_Y); ballCtx.rotate(roll);
-  // 이미지(alpha = 원형 누끼) — 정사각형 중심을 회전축으로 잡아 위아래 흔들림을 막는다.
-  ballCtx.drawImage(yarnImg, -iw/2, -ih/2, iw, ih);
+  // 이미지(alpha = 원형 누끼) — 실제 불투명 픽셀 중심을 회전축으로 잡아 위아래 흔들림을 막는다.
+  ballCtx.drawImage(yarnImg, -YARN_PIVOT.x*s, -YARN_PIVOT.y*s, iw, ih);
   // 가운데로 갈수록 어둡게 — 공 픽셀 위에만 (source-atop)
   ballCtx.globalCompositeOperation = 'source-atop';
   const g = ballCtx.createRadialGradient(0,0,0, 0,0,BALL_R);
@@ -579,27 +587,46 @@ function drawBall(min){
   ballCtx.restore();
 }
 
-// 공의 바닥 그림자: 마네킹 그림자와 동일 방식 — 검정 타원을 문 반대 방향으로 눕히고
-//   접점=진함→끝=옅음 그라디언트. multiply 라 빛 영역에서만 보이고, 공과 함께 굴러감.
-function drawBallShadow(min){
-  sweepCtx.clearRect(0,0,W,H);
+function drawBallShadow(min, polys){
+  if (!polys) return;
   const cx = secCx();
-  const contact = [cx, SWEEP_BAR_H + 4];                         // 바닥 접점
-  const ang = Math.atan2(contact[1]-MAN_LIGHT[1], contact[0]-MAN_LIGHT[0]);  // 문 반대 방향
-  const len = BALL_R * 2 * BALL_SHADOW_STRETCH * BALL_SHADOW_SIZE;
-  const wid = BALL_R * 2 * 0.9 * BALL_SHADOW_SIZE;
-  sweepCtx.save();
-  sweepCtx.translate(contact[0], contact[1]);
-  sweepCtx.rotate(ang + Math.PI/2);                              // 위(-y)축 = ang 방향
-  const g = sweepCtx.createLinearGradient(0, 0, 0, -len);
-  g.addColorStop(0, `rgba(0,0,0,${BALL_SHADOW_DARK})`);          // 접점 = 진함
-  g.addColorStop(1, 'rgba(0,0,0,0)');                            // 끝 = 옅음
-  sweepCtx.fillStyle = g;
-  sweepCtx.beginPath(); sweepCtx.ellipse(0, -len/2, wid/2, len/2, 0, 0, Math.PI*2); sweepCtx.fill();
-  sweepCtx.restore();
+  const contact = [cx, SWEEP_BAR_H + 4];
+  const ang = Math.atan2(contact[1]-MAN_LIGHT[1], contact[0]-MAN_LIGHT[0]);
+  const len = BALL_R * 2 * YARN_SHADOW_LEN;
+  const wid = BALL_R * 2 * YARN_SHADOW_WID;
+
+  sfCtx.clearRect(0,0,W,H);
+  sfCtx.save();
+  sfCtx.translate(contact[0], contact[1]);
+  sfCtx.rotate(ang + Math.PI/2);
+  sfCtx.filter = 'blur(7px)';
+  const g = sfCtx.createLinearGradient(0, 0, 0, -len);
+  g.addColorStop(0, `rgba(0,0,0,${YARN_SHADOW_ALPHA})`);
+  g.addColorStop(0.58, `rgba(0,0,0,${YARN_SHADOW_ALPHA * 0.28})`);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  sfCtx.fillStyle = g;
+  sfCtx.beginPath();
+  sfCtx.ellipse(0, -len/2, wid/2, len/2, 0, 0, Math.PI*2);
+  sfCtx.fill();
+  sfCtx.restore();
+
+  lmCtx.clearRect(0,0,W,H);
+  fillLightUnion(lmCtx, polys, '#fff');
+  lmCtx.globalCompositeOperation = 'destination-in';
+  lmCtx.fillStyle = '#fff';
+  lmCtx.fillRect(0, SWEEP_BAR_H, W, H - SWEEP_BAR_H);
+  lmCtx.globalCompositeOperation = 'source-over';
+
+  sfCtx.save();
+  sfCtx.globalCompositeOperation = 'destination-in';
+  sfCtx.drawImage(lmCanvas, 0, 0);
+  sfCtx.restore();
+
+  sweepCtx.drawImage(sfCanvas, 0, 0);
 }
-function drawSeconds(min){
+function drawSeconds(min, polys){
   sweepCtx.clearRect(0,0,W,H);
+  drawBallShadow(min, polys);
   drawBall(min);
 }
 
@@ -790,7 +817,7 @@ function draw(min) {
   drawGlow(polys);
   drawStruct(shape);
   drawMannequins(polys);
-  drawSeconds(curMin);
+  drawSeconds(curMin, polys);
 }
 
 let editOn = false;
@@ -846,7 +873,10 @@ window.addEventListener('keydown', e => { if (e.key === 'e' || e.key === 'E') en
 // 실제 12시간 흐름에 맞춰 전체 화면을 갱신한다. 편집 모드에서는 11:59 상태를 고정한다.
 (function tick(){
   const now = new Date();
-  if (editOn) drawSeconds(curMin);
+  if (editOn) {
+    const shape = getShape(curMin);
+    drawSeconds(curMin, getLightPolygons(curMin, shape));
+  }
   else {
     draw(clockMinutes(now));
     updateLamps(now);
