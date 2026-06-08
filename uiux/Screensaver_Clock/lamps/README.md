@@ -1,12 +1,8 @@
-Place five transparent-background lamp images here.
+Place one transparent-background off-lamp image here.
 
-Expected filenames:
+Expected filename:
 
-- `lamp-1.png`
-- `lamp-2.png`
-- `lamp-3.png`
-- `lamp-4.png`
-- `lamp-5.png`
+- `lamp-off.png`
 
 The page reveals them by minute:
 
@@ -17,4 +13,4 @@ The page reveals them by minute:
 - 40-49: lamps 1-4 on
 - 50-59: lamps 1-5 on
 
-Use transparent PNG cutouts. Desaturated, low-key, slightly unsettling lamps will match the current scene best.
+The same off-lamp image is repeated five times. When each lamp turns on, CSS adds a white radial gradient over the lamp's bulb area, so a separate "on" image is not required.

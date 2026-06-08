@@ -7,3 +7,6 @@
 
 # Logs
 *.log
+
+# Local source audio; the site uses compressed/track-*.mp3 instead.
+uiux/Screensaver_Clock/audio/Track_*.mp3

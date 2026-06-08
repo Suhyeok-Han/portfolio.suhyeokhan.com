@@ -42,41 +42,87 @@
   #glow-canvas  { z-index: 3; mix-blend-mode: screen; }
   #struct-canvas{ z-index: 4; }                            /* 문 + 문 두께 (공 그림자 앞) */
   #man-canvas   { z-index: 5; mix-blend-mode: multiply; }
-  #lamp-layer   { z-index: 6; mix-blend-mode: multiply; }
+  #lamp-layer   { z-index: 6; }
   #ball-canvas  { z-index: 7; }                            /* 초침 = 굴러가는 공 */
 
   .clock-lamp {
     position: absolute;
+    width: var(--lamp-w);
     height: auto;
     opacity: 0;
-    filter: grayscale(1) saturate(0.12) contrast(1.35) brightness(0.85);
     transform-origin: 50% 100%;
+    transition: opacity 1.8s ease;
+  }
+  .clock-lamp img {
+    display: block;
+    width: 100%;
+    height: auto;
+    opacity: 0;
+    filter: grayscale(1) saturate(0.06) contrast(1.45) brightness(0.68);
+    mix-blend-mode: multiply;
     transition: opacity 1.8s ease, filter 1.8s ease;
   }
+  .clock-lamp::before,
+  .clock-lamp::after {
+    content: "";
+    position: absolute;
+    left: var(--glow-x, 56%);
+    top: var(--glow-y, 34%);
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    transition: opacity 2s ease;
+  }
+  .clock-lamp::before {
+    width: 52%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.94) 0%, rgba(255,255,255,.44) 24%, rgba(255,255,255,0) 68%);
+    filter: blur(6px);
+    mix-blend-mode: screen;
+  }
+  .clock-lamp::after {
+    width: 118%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.32) 0%, rgba(255,255,255,.12) 28%, rgba(255,255,255,0) 72%);
+    filter: blur(22px);
+    mix-blend-mode: screen;
+  }
   .clock-lamp.is-on {
-    opacity: 0.76;
-    filter: grayscale(1) saturate(0.08) contrast(1.45) brightness(1.05);
+    opacity: 1;
+  }
+  .clock-lamp.is-on img {
+    opacity: 0.68;
+    filter: grayscale(1) saturate(0.04) contrast(1.52) brightness(0.9);
+  }
+  .clock-lamp.is-on::before {
+    opacity: 0.92;
+  }
+  .clock-lamp.is-on::after {
+    opacity: 0.74;
   }
   .clock-lamp.is-missing {
     display: none;
   }
-  .clock-lamp:nth-child(1) { right: 352px; bottom: 106px; width: 118px; transform: rotate(-5deg); }
-  .clock-lamp:nth-child(2) { right: 270px; bottom:  74px; width: 128px; transform: rotate( 3deg); }
-  .clock-lamp:nth-child(3) { right: 184px; bottom: 116px; width: 120px; transform: rotate(-2deg); }
-  .clock-lamp:nth-child(4) { right: 108px; bottom:  84px; width: 132px; transform: rotate( 4deg); }
-  .clock-lamp:nth-child(5) { right:  40px; bottom: 134px; width: 116px; transform: rotate(-4deg); }
+  .clock-lamp:nth-child(1) { right: 352px; bottom: 106px; --lamp-w: 118px; transform: rotate(-5deg); }
+  .clock-lamp:nth-child(2) { right: 270px; bottom:  74px; --lamp-w: 128px; transform: rotate( 3deg); }
+  .clock-lamp:nth-child(3) { right: 184px; bottom: 116px; --lamp-w: 120px; transform: rotate(-2deg); }
+  .clock-lamp:nth-child(4) { right: 108px; bottom:  84px; --lamp-w: 132px; transform: rotate( 4deg); }
+  .clock-lamp:nth-child(5) { right:  40px; bottom: 134px; --lamp-w: 116px; transform: rotate(-4deg); }
 
   #sound-toggle {
     position: fixed;
-    left: 14px;
-    bottom: 14px;
+    --stage-w: min(100vw, 56.25vh);
+    left: calc(50vw + var(--stage-w) / 2 + 12px);
+    bottom: 18px;
     z-index: 40;
-    padding: 7px 10px;
+    padding: 5px 6px;
     border: 1px solid rgba(255,255,255,.18);
     border-radius: 0;
     background: rgba(12,12,12,.58);
     color: rgba(255,255,255,.62);
-    font: 11px/1 'Courier New', monospace;
+    font: 9px/1 'Courier New', monospace;
     letter-spacing: 0;
     cursor: pointer;
     transition: color .2s ease, border-color .2s ease, background .2s ease, opacity .2s ease;
@@ -131,17 +177,16 @@ const sfCanvas = document.createElement('canvas'); sfCanvas.width = W; sfCanvas.
 const sfCtx = sfCanvas.getContext('2d');
 
 // ── 시간별 사운드 / 10분 단위 전등 ───────────────────────────
-// 오디오 파일은 audio/hour-01.mp3 ... audio/hour-12.mp3 로 넣는다.
-// 1시/13시 = hour-01, 2시/14시 = hour-02, ... 12시/0시 = hour-12.
+// 사이트는 64kbps 압축본을 사용한다. 원본 Track_*.mp3 파일은 로컬 백업용.
 const HOUR_TRACKS = Array.from({ length: 12 }, (_, i) =>
-  `audio/hour-${String(i + 1).padStart(2, '0')}.mp3`
+  `audio/compressed/track-${String(i + 1).padStart(2, '0')}.mp3`
 );
-// 전등 이미지는 투명 배경 PNG를 권장한다. 파일이 없으면 조용히 숨겨진다.
-const LAMP_SOURCES = Array.from({ length: 5 }, (_, i) => `lamps/lamp-${i + 1}.png`);
+// 꺼진 램프 이미지 한 장을 5번 복제하고, 켜질 때 전구 위치에 흰색 그라디언트를 얹는다.
+const LAMP_SOURCE = 'lamps/lamp-off.png';
 const soundToggle = document.getElementById('sound-toggle');
 const hourlyPlayer = new Audio();
 hourlyPlayer.loop = true;
-hourlyPlayer.preload = 'auto';
+hourlyPlayer.preload = 'none';
 let soundEnabled = false;
 let activeTrackIndex = -1;
 let activeLampCount = -1;
@@ -156,15 +201,17 @@ function minuteLampCount(date = new Date()) {
 }
 function initLamps() {
   const layer = document.getElementById('lamp-layer');
-  lampNodes = LAMP_SOURCES.map(src => {
+  lampNodes = Array.from({ length: 5 }, () => {
+    const lamp = document.createElement('div');
     const img = new Image();
-    img.className = 'clock-lamp';
+    lamp.className = 'clock-lamp';
     img.alt = '';
     img.decoding = 'async';
-    img.onerror = () => img.classList.add('is-missing');
-    img.src = encodeURI(src);
-    layer.appendChild(img);
-    return img;
+    img.onerror = () => lamp.classList.add('is-missing');
+    img.src = encodeURI(LAMP_SOURCE);
+    lamp.appendChild(img);
+    layer.appendChild(lamp);
+    return lamp;
   });
 }
 function updateLamps(date = new Date()) {
@@ -192,7 +239,8 @@ function syncHourlyAudio(date = new Date(), force = false) {
     .then(() => setSoundButton(`Sound ${String(nextIndex + 1).padStart(2, '0')}`, true))
     .catch(() => {
       soundEnabled = false;
-      setSoundButton(`Missing Track ${String(nextIndex + 1).padStart(2, '0')}`);
+      const hasMediaError = hourlyPlayer.error && hourlyPlayer.error.code;
+      setSoundButton(hasMediaError ? `Missing Track ${String(nextIndex + 1).padStart(2, '0')}` : 'Enable Sound');
     });
 }
 soundToggle.addEventListener('click', () => {
@@ -226,6 +274,7 @@ const DOOR_BBOX = [236, 182, 670, 1241];
 function loadBackgrounds(redraw) {
   let n = 4;
   [[floorImg,'floor.jpg'], [wallImg,'wall.jpg'], [doorImg,'door.png'], [yarnImg,'yarn.png']].forEach(([im,f]) => {
+    im.decoding = 'async';
     im.onload = im.onerror = () => { if (--n <= 0) redraw(); };
     im.src = encodeURI(BG_DIR + f);
   });
@@ -472,7 +521,9 @@ const BALL_CENTER_DARK = 0.55;  // 가운데로 갈수록 어두운 그라디언
 const BALL_SHADOW_DARK = 1.0;   // 바닥 그림자 진하기 (접점) — 기존 0.6 의 ~2배(100%↑)
 const BALL_SHADOW_STRETCH = 1.7;// 그림자 길이 배율
 const BALL_SHADOW_SIZE = 1.3;   // 그림자 크기 (30%↑)
-const YARN_C = [743, 703], YARN_OBJ_R = 626;   // yarn.png 의 원형 객체 중심·반지름
+const YARN_ASSET_SCALE = 0.5;
+const YARN_C = [743 * YARN_ASSET_SCALE, 703 * YARN_ASSET_SCALE];
+const YARN_OBJ_R = 626 * YARN_ASSET_SCALE;   // yarn.png 의 원형 객체 중심·반지름
 function secCx(){ const p=(Date.now()%SEC_PERIOD)/SEC_PERIOD; return (W+BALL_R) - p*(W+BALL_R*2); }
 
 // 공: 상단 opening(벽·문 제외)에서 굴러가며, 가운데로 갈수록 어두운 그라디언트.
@@ -486,7 +537,7 @@ function drawBall(min){
   ballCtx.beginPath(); ballCtx.rect(0,0,W,SWEEP_BAR_H); ballCtx.clip();   // 상단 사각형 영역
   ballCtx.translate(cx, BALL_Y); ballCtx.rotate(roll);
   // 이미지(alpha = 원형 누끼) — 객체 중심을 원점에 두고 그림
-  ballCtx.drawImage(yarnImg, -YARN_C[0]*s, -YARN_C[1]*s, 1456*s, 1456*s);
+  ballCtx.drawImage(yarnImg, -YARN_C[0]*s, -YARN_C[1]*s, yarnImg.naturalWidth*s, yarnImg.naturalHeight*s);
   // 가운데로 갈수록 어둡게 — 공 픽셀 위에만 (source-atop)
   ballCtx.globalCompositeOperation = 'source-atop';
   const g = ballCtx.createRadialGradient(0,0,0, 0,0,BALL_R);
@@ -540,20 +591,29 @@ const MAN_SHRINK = 10;         // 내부 객체 높이 추가 축소(px)
 const MAN_SIZE_PCT = 0.5;      // 현재 크기의 50%에서 시작(슬라이스에 맞춰 더 줄어들 수 있음)
 const MAN_SAT   = 0.10;        // 채도 10%
 const MAN_IMGDIR = 'wooden manequins/';
-const IMG_W = 896, IMG_H = 1344;
+const MAN_ASSET_SCALE = 0.5;
+const IMG_W = 896 * MAN_ASSET_SCALE, IMG_H = 1344 * MAN_ASSET_SCALE;
+function scaleBoxMap(map, scale) {
+  return Object.fromEntries(Object.entries(map).map(([key, box]) => [key, box.map(v => v * scale)]));
+}
+function scalePointMap(map, scale) {
+  return Object.fromEntries(Object.entries(map).map(([key, point]) => [key, point.map(v => v * scale)]));
+}
 // 각 이미지의 실제 객체(불투명) bbox: [left, top, right, bottom]
-const MAN_BBOX = {
+const MAN_BBOX_BASE = {
   M1:[263,183,564,1329], M2:[196,259,686,1291], M3:[320,220,576,1272],
   M4:[115,246,774,1292], M5:[253,237,597,1314], M6:[267,199,655,1305],
   M7:[75,199,770,1344],  M8:[266,226,591,1311], M9:[176,168,541,1315],
   M10:[293,200,687,1285],M11:[272,212,575,1278],M12:[257,202,576,1293]
 };
+const MAN_BBOX = scaleBoxMap(MAN_BBOX_BASE, MAN_ASSET_SCALE);
 // 각 마네킹의 실제 "발" 위치 [x,y] (이미지 좌표, 하단 불투명 픽셀 중심) — 그림자 정렬용
-const MAN_FEET = {
+const MAN_FEET_BASE = {
   M1:[415.7,1327], M2:[425.3,1288], M3:[449.7,1270], M4:[427.7,1291],
   M5:[418.9,1312], M6:[527.6,1302], M7:[458.9,1343], M8:[435.4,1309],
   M9:[477.1,1312], M10:[433.2,1284], M11:[431.6,1276], M12:[427.5,1291]
 };
+const MAN_FEET = scalePointMap(MAN_FEET_BASE, MAN_ASSET_SCALE);
 const MAN_ORDER = ['M1','M2','M3','M4','M5','M6','M7','M8','M9','M10','M11','M12'];
 const manImgs = {};
 
@@ -681,6 +741,7 @@ function loadMannequins(redraw) {
   let n = MAN_ORDER.length;
   MAN_ORDER.forEach(name => {
     const im = new Image();
+    im.decoding = 'async';
     im.onload = im.onerror = () => { if (--n <= 0) redraw(); };
     im.src = encodeURI(MAN_IMGDIR + name + '.png');
     manImgs[name] = im;
@@ -711,8 +772,11 @@ let editOn = false;
 draw(curMin);
 // 이미지 로드(배경 + 마네킹) 후 현재 시각으로 다시 그린다.
 const redraw = () => draw(editOn ? curMin : clockMinutes());
-loadBackgrounds(redraw);
-loadMannequins(redraw);
+loadBackgrounds(() => {
+  redraw();
+  const schedule = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
+  schedule(() => loadMannequins(redraw));
+});
 initLamps();
 updateLamps();
 
