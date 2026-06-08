@@ -1,6 +1,6 @@
 /* ============================================================
    portfolio.suhyeokhan.com — base styles
-   Pure static site. No build step required.
+   Pure static site. No build step, no JavaScript required.
    ============================================================ */
 
 :root {
@@ -19,6 +19,7 @@ html {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   scroll-behavior: smooth;
+  interpolate-size: allow-keywords; /* enables smooth <details> animation where supported */
 }
 
 body {
@@ -161,7 +162,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .cat-list a:hover .cat-arrow { opacity: 1; transform: translateX(0); }
 
 /* ---------- page head (category / work) ---------- */
-.page-head { padding: 56px 0 40px; }
+.page-head { padding: 56px 0 32px; }
 .page-head h1 {
   font-size: clamp(2rem, 5vw, 3rem);
   font-weight: 600;
@@ -179,32 +180,81 @@ ul { list-style: none; margin: 0; padding: 0; }
 }
 .back-link:hover { color: var(--fg); }
 
-/* ---------- work grid (category page) ---------- */
-.work-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 44px 32px;
-  padding-bottom: 96px;
+/* ---------- accordion (category page) ---------- */
+.acc-list { border-top: 1px solid var(--line); padding-bottom: 96px; }
+.acc { border-bottom: 1px solid var(--line); }
+.acc__head {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 26px 4px;
+  transition: padding-left .25s var(--ease);
 }
-.work-card a { display: block; }
-.work-card__thumb {
-  aspect-ratio: 4 / 3;
-  background: var(--card);
-  border: 1px solid var(--line);
+.acc__head::-webkit-details-marker { display: none; }
+.acc__head:hover { padding-left: 14px; }
+.acc__head:focus-visible { outline: 2px solid var(--fg); outline-offset: 4px; }
+.acc__num { font-size: .78rem; color: var(--muted); width: 28px; flex: none; letter-spacing: .08em; }
+.acc__title { font-size: clamp(1.3rem, 3vw, 1.9rem); font-weight: 600; flex: 1; letter-spacing: .01em; }
+
+/* +/- toggle icon */
+.acc__icon { position: relative; width: 16px; height: 16px; flex: none; }
+.acc__icon::before, .acc__icon::after {
+  content: ""; position: absolute; background: var(--fg);
+  transition: transform .3s var(--ease), opacity .3s var(--ease);
+}
+.acc__icon::before { top: 7px; left: 0; width: 16px; height: 2px; }
+.acc__icon::after  { left: 7px; top: 0; width: 2px; height: 16px; }
+.acc[open] .acc__icon::after { transform: scaleY(0); opacity: 0; }
+
+/* expanded panel */
+.acc__panel { padding: 4px 4px 40px 52px; max-width: 760px; }
+.acc__desc { margin: 0 0 22px; }
+
+/* the "click me" photo */
+.acc__media {
+  position: relative;
+  display: block;
   overflow: hidden;
-  border-radius: 2px;
-  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--card);
 }
-.work-card__thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--ease); }
-.work-card a:hover .work-card__thumb img { transform: scale(1.03); }
-.work-card__title { font-size: 1.15rem; font-weight: 600; margin: 0 0 6px; }
-.work-card__blurb { margin: 0; color: var(--muted); font-size: .92rem; }
+.acc__media img { width: 100%; display: block; transition: transform .6s var(--ease); }
+.acc__media:hover img { transform: scale(1.04); }
+.acc__media::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: rgba(23, 21, 15, 0);
+  transition: background .3s var(--ease);
+}
+.acc__media:hover::after { background: rgba(23, 21, 15, .22); }
+.acc__badge {
+  position: absolute; right: 16px; bottom: 16px; z-index: 1;
+  display: inline-flex; align-items: center;
+  padding: 11px 20px;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: .82rem;
+  letter-spacing: .04em;
+  font-weight: 500;
+  opacity: .94;
+  transform: translateY(4px);
+  transition: transform .3s var(--ease), opacity .3s var(--ease);
+}
+.acc__media:hover .acc__badge { opacity: 1; transform: translateY(0); }
 
-/* ---------- empty state ---------- */
-.empty { padding: 32px 0 120px; color: var(--muted); }
-.empty p { font-size: 1.1rem; margin: 0; }
+/* smooth open/close where supported (progressive enhancement) */
+.acc::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition: block-size .4s var(--ease), content-visibility .4s allow-discrete;
+}
+.acc[open]::details-content { block-size: auto; }
 
-/* ---------- work (post) page ---------- */
+/* ---------- work (detail / post) page ---------- */
 .work { padding: 8px 0 96px; max-width: 760px; margin: 0 auto; }
 .work__head { padding: 8px 0 32px; }
 .work__cat { font-size: .74rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
@@ -248,5 +298,5 @@ ul { list-style: none; margin: 0; padding: 0; }
   .profile { grid-template-columns: 1fr; gap: 28px; padding: 48px 0; }
   .profile__photo { max-width: 200px; }
   .profile__name { font-size: 2.1rem; }
-  .work-grid { grid-template-columns: 1fr; gap: 32px; }
+  .acc__panel { padding-left: 4px; padding-bottom: 28px; }
 }

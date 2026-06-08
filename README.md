@@ -1,6 +1,6 @@
 # portfolio.suhyeokhan.com
 
-Suhyeok Han의 포트폴리오 정적 사이트. 빌드 도구 없이 순수 HTML/CSS로 동작합니다.
+Suhyeok Han의 포트폴리오 정적 사이트. 빌드 도구·JavaScript 없이 순수 HTML/CSS로 동작합니다.
 
 ## 구조
 
@@ -11,23 +11,22 @@ portfolio.suhyeokhan.com/
 ├── assets/
 │   ├── css/style.css       # 전체 스타일
 │   └── img/                # 이미지 (placeholder 포함)
-├── categories/             # 카테고리별 목록 페이지
-│   ├── uiux.html
-│   ├── visual-design.html
-│   ├── fashion-design.html
-│   └── etc.html
-└── works/                  # 개별 작업물(게시글) 페이지
-    └── uiux/
-        ├── project-1.html
-        ├── project-2.html
-        └── project-3.html
+├── uiux/                   # 카테고리 폴더
+│   ├── index.html          #   - 아코디언 목록 ("UI/UX" 클릭 시)
+│   ├── project-1.html      #   - 사진 클릭 시 이동하는 상세 페이지
+│   ├── project-2.html
+│   └── project-3.html
+├── visual-design/          # index.html + project-1~2.html
+├── fashion-design/         # index.html + project-1~2.html
+└── etc/                    # index.html + project-1~2.html
 ```
 
-흐름: **메인(카테고리 목록)** → 카테고리 클릭 → **카테고리 페이지(작업물 목록)** → 작업물 클릭 → **작업물 게시글 페이지**.
+흐름: **메인(카테고리 목록)** → 카테고리 클릭 → **카테고리 페이지(아코디언 목록)** → 항목 클릭 시 펼쳐짐 → 펼쳐진 **사진 클릭** → **상세 페이지**.
+
+- 아코디언은 `<details name="...">` 로 구현되어 **한 번에 하나만** 열립니다. (JS 불필요)
+- 펼쳐진 영역의 사진(`.acc__media`)을 클릭하면 같은 폴더의 `project-N.html` 상세 페이지로 이동합니다.
 
 ## 로컬에서 보기
-
-`index.html`을 브라우저로 바로 열어도 되고, 간단한 서버를 띄워도 됩니다:
 
 ```bash
 cd portfolio.suhyeokhan.com
@@ -39,14 +38,17 @@ python3 -m http.server 8000
 
 - **프로필 사진**: `assets/img/profile-placeholder.svg` → 실제 사진(예: `assets/img/profile.jpg`)으로 교체 후 `index.html`의 `<img src>` 수정
 - **한 줄 소개**: `index.html`의 `.profile__bio` 문구
-- **작업물 이미지/설명/링크**: `works/uiux/*.html`의 이미지, 본문, `View Project` 링크(`href`)
+- **항목 제목 / 설명 / 사진**: 각 카테고리의 `index.html` (아코디언의 `.acc__title`, `.acc__desc`, `.acc__media img`)
+- **상세 페이지 내용 / 이미지 / 외부 링크**: `<카테고리>/project-N.html` (`.work__title`, `.work__body`, `.work__hero img`, `.work__link`의 `href`)
+
+> 항목 하나를 수정할 때는 보통 2개 파일을 손봅니다 — ① 카테고리 `index.html`의 아코디언, ② 그 항목의 `project-N.html` 상세 페이지.
 
 ## 새 작업물 추가하기
 
-1. `works/<카테고리>/project-N.html` 파일을 기존 파일 복사해서 생성
-2. 해당 카테고리 페이지(`categories/<카테고리>.html`)의 `.work-grid`에 `<li class="work-card">…</li>` 항목 추가 후 새 파일로 링크
+1. `<카테고리>/project-N.html` 을 기존 파일을 복사해 생성하고 제목·내용·이미지·링크 수정
+2. 해당 카테고리 `index.html` 의 `.acc-list` 에 `<li><details class="acc" name="<카테고리>">…</details></li>` 블록을 복사·추가하고, `.acc__media` 의 `href` 를 새 `project-N.html` 로 연결
 
-비어 있는 카테고리(Visual Design / Fashion Design / Etc.)는 `categories/uiux.html`의 `.work-grid` 구조를 복사해 채우면 됩니다.
+> 같은 카테고리의 `<details>` 는 `name` 값이 같아야 "한 번에 하나만 열림"이 동작합니다.
 
 ## 배포 (GitHub Pages)
 
