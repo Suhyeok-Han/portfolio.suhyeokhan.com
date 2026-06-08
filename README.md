@@ -15,7 +15,11 @@ portfolio.suhyeokhan.com/
 │   ├── index.html          #   - 아코디언 목록 ("UI/UX" 클릭 시)
 │   ├── project-1.html      #   - 사진 클릭 시 이동하는 상세 페이지
 │   ├── project-2.html
-│   └── project-3.html
+│   ├── project-3.html      #   - ScreenSaver Workshop redirect
+│   └── Screensaver_Clock/  #   - ScreenSaver Workshop 독립 실행 페이지
+│       ├── index.html
+│       ├── Background Source/
+│       └── wooden manequins/
 ├── visual-design/          # index.html + project-1~2.html
 ├── fashion-design/         # index.html + project-1~2.html
 └── etc/                    # index.html + project-1~2.html
@@ -24,7 +28,7 @@ portfolio.suhyeokhan.com/
 흐름: **메인(카테고리 목록)** → 카테고리 클릭 → **카테고리 페이지(아코디언 목록)** → 항목 클릭 시 펼쳐짐 → 펼쳐진 **사진 클릭** → **상세 페이지**.
 
 - 아코디언은 `<details name="...">` 로 구현되어 **한 번에 하나만** 열립니다. (JS 불필요)
-- 펼쳐진 영역의 사진(`.acc__media`)을 클릭하면 같은 폴더의 `project-N.html` 상세 페이지로 이동합니다.
+- 펼쳐진 영역의 사진(`.acc__media`)을 클릭하면 같은 폴더의 `project-N.html` 상세 페이지 또는 독립 실행 폴더(예: `Screensaver_Clock/`)로 이동합니다.
 
 ## 로컬에서 보기
 
@@ -39,14 +43,14 @@ python3 -m http.server 8000
 - **프로필 사진**: `assets/img/profile-placeholder.svg` → 실제 사진(예: `assets/img/profile.jpg`)으로 교체 후 `index.html`의 `<img src>` 수정
 - **한 줄 소개**: `index.html`의 `.profile__bio` 문구
 - **항목 제목 / 설명 / 사진**: 각 카테고리의 `index.html` (아코디언의 `.acc__title`, `.acc__desc`, `.acc__media img`)
-- **상세 페이지 내용 / 이미지 / 외부 링크**: `<카테고리>/project-N.html` (`.work__title`, `.work__body`, `.work__hero img`, `.work__link`의 `href`)
+- **상세 페이지 내용 / 이미지 / 외부 링크**: `<카테고리>/project-N.html` (`.work__title`, `.work__body`, `.work__hero img`, `.work__link`의 `href`) 또는 독립 실행 페이지 폴더의 `index.html`
 
 > 항목 하나를 수정할 때는 보통 2개 파일을 손봅니다 — ① 카테고리 `index.html`의 아코디언, ② 그 항목의 `project-N.html` 상세 페이지.
 
 ## 새 작업물 추가하기
 
-1. `<카테고리>/project-N.html` 을 기존 파일을 복사해 생성하고 제목·내용·이미지·링크 수정
-2. 해당 카테고리 `index.html` 의 `.acc-list` 에 `<li><details class="acc" name="<카테고리>">…</details></li>` 블록을 복사·추가하고, `.acc__media` 의 `href` 를 새 `project-N.html` 로 연결
+1. `<카테고리>/project-N.html` 을 기존 파일을 복사해 생성하고 제목·내용·이미지·링크 수정. 독립 실행 HTML 작업물은 `<카테고리>/<작업물_폴더>/index.html` 형태로 두면 깔끔합니다.
+2. 해당 카테고리 `index.html` 의 `.acc-list` 에 `<li><details class="acc" name="<카테고리>">…</details></li>` 블록을 복사·추가하고, `.acc__media` 의 `href` 를 새 `project-N.html` 또는 `<작업물_폴더>/` 로 연결
 
 > 같은 카테고리의 `<details>` 는 `name` 값이 같아야 "한 번에 하나만 열림"이 동작합니다.
 
