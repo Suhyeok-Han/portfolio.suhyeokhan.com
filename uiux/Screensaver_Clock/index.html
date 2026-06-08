@@ -42,7 +42,55 @@
   #glow-canvas  { z-index: 3; mix-blend-mode: screen; }
   #struct-canvas{ z-index: 4; }                            /* 문 + 문 두께 (공 그림자 앞) */
   #man-canvas   { z-index: 5; mix-blend-mode: multiply; }
+  #lamp-layer   { z-index: 6; mix-blend-mode: multiply; }
   #ball-canvas  { z-index: 7; }                            /* 초침 = 굴러가는 공 */
+
+  .clock-lamp {
+    position: absolute;
+    height: auto;
+    opacity: 0;
+    filter: grayscale(1) saturate(0.12) contrast(1.35) brightness(0.85);
+    transform-origin: 50% 100%;
+    transition: opacity 1.8s ease, filter 1.8s ease;
+  }
+  .clock-lamp.is-on {
+    opacity: 0.76;
+    filter: grayscale(1) saturate(0.08) contrast(1.45) brightness(1.05);
+  }
+  .clock-lamp.is-missing {
+    display: none;
+  }
+  .clock-lamp:nth-child(1) { right: 352px; bottom: 106px; width: 118px; transform: rotate(-5deg); }
+  .clock-lamp:nth-child(2) { right: 270px; bottom:  74px; width: 128px; transform: rotate( 3deg); }
+  .clock-lamp:nth-child(3) { right: 184px; bottom: 116px; width: 120px; transform: rotate(-2deg); }
+  .clock-lamp:nth-child(4) { right: 108px; bottom:  84px; width: 132px; transform: rotate( 4deg); }
+  .clock-lamp:nth-child(5) { right:  40px; bottom: 134px; width: 116px; transform: rotate(-4deg); }
+
+  #sound-toggle {
+    position: fixed;
+    left: 14px;
+    bottom: 14px;
+    z-index: 40;
+    padding: 7px 10px;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 0;
+    background: rgba(12,12,12,.58);
+    color: rgba(255,255,255,.62);
+    font: 11px/1 'Courier New', monospace;
+    letter-spacing: 0;
+    cursor: pointer;
+    transition: color .2s ease, border-color .2s ease, background .2s ease, opacity .2s ease;
+  }
+  #sound-toggle:hover,
+  #sound-toggle:focus-visible {
+    color: rgba(255,255,255,.9);
+    border-color: rgba(255,255,255,.38);
+    background: rgba(12,12,12,.82);
+    outline: none;
+  }
+  #sound-toggle.is-playing {
+    opacity: .42;
+  }
 </style>
 </head>
 <body>
@@ -54,9 +102,11 @@
     <canvas id="struct-canvas" class="layer" width="1080" height="1920"></canvas>
     <canvas id="man-canvas" class="layer" width="1080" height="1920"></canvas>
     <canvas id="sweep-canvas" class="layer" width="1080" height="1920"></canvas>
+    <div id="lamp-layer" class="layer" aria-hidden="true"></div>
     <canvas id="ball-canvas" class="layer" width="1080" height="1920"></canvas>
   </div>
 </div>
+<button id="sound-toggle" type="button" aria-pressed="false">Enable Sound</button>
 
 <script>
 const W = 1080, H = 1920;
@@ -79,6 +129,86 @@ const silCtx = silCanvas.getContext('2d');
 // 초침 바닥 그림자용 오프스크린 (기울임 + 빛영역 마스크)
 const sfCanvas = document.createElement('canvas'); sfCanvas.width = W; sfCanvas.height = H;
 const sfCtx = sfCanvas.getContext('2d');
+
+// ── 시간별 사운드 / 10분 단위 전등 ───────────────────────────
+// 오디오 파일은 audio/hour-01.mp3 ... audio/hour-12.mp3 로 넣는다.
+// 1시/13시 = hour-01, 2시/14시 = hour-02, ... 12시/0시 = hour-12.
+const HOUR_TRACKS = Array.from({ length: 12 }, (_, i) =>
+  `audio/hour-${String(i + 1).padStart(2, '0')}.mp3`
+);
+// 전등 이미지는 투명 배경 PNG를 권장한다. 파일이 없으면 조용히 숨겨진다.
+const LAMP_SOURCES = Array.from({ length: 5 }, (_, i) => `lamps/lamp-${i + 1}.png`);
+const soundToggle = document.getElementById('sound-toggle');
+const hourlyPlayer = new Audio();
+hourlyPlayer.loop = true;
+hourlyPlayer.preload = 'auto';
+let soundEnabled = false;
+let activeTrackIndex = -1;
+let activeLampCount = -1;
+let lampNodes = [];
+
+function hourTrackIndex(date = new Date()) {
+  const hour12 = date.getHours() % 12;
+  return hour12 === 0 ? 11 : hour12 - 1;
+}
+function minuteLampCount(date = new Date()) {
+  return Math.max(0, Math.min(5, Math.floor(date.getMinutes() / 10)));
+}
+function initLamps() {
+  const layer = document.getElementById('lamp-layer');
+  lampNodes = LAMP_SOURCES.map(src => {
+    const img = new Image();
+    img.className = 'clock-lamp';
+    img.alt = '';
+    img.decoding = 'async';
+    img.onerror = () => img.classList.add('is-missing');
+    img.src = encodeURI(src);
+    layer.appendChild(img);
+    return img;
+  });
+}
+function updateLamps(date = new Date()) {
+  const count = minuteLampCount(date);
+  if (count === activeLampCount) return;
+  activeLampCount = count;
+  lampNodes.forEach((lamp, i) => lamp.classList.toggle('is-on', i < count));
+}
+function setSoundButton(label, playing = false) {
+  soundToggle.textContent = label;
+  soundToggle.classList.toggle('is-playing', playing);
+  soundToggle.setAttribute('aria-pressed', playing ? 'true' : 'false');
+}
+function syncHourlyAudio(date = new Date(), force = false) {
+  if (!soundEnabled) return;
+  const nextIndex = hourTrackIndex(date);
+  if (!force && nextIndex === activeTrackIndex && !hourlyPlayer.paused) return;
+  if (nextIndex !== activeTrackIndex || force) {
+    activeTrackIndex = nextIndex;
+    hourlyPlayer.pause();
+    hourlyPlayer.src = encodeURI(HOUR_TRACKS[nextIndex]);
+    hourlyPlayer.currentTime = 0;
+  }
+  hourlyPlayer.play()
+    .then(() => setSoundButton(`Sound ${String(nextIndex + 1).padStart(2, '0')}`, true))
+    .catch(() => {
+      soundEnabled = false;
+      setSoundButton(`Missing Track ${String(nextIndex + 1).padStart(2, '0')}`);
+    });
+}
+soundToggle.addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  if (!soundEnabled) {
+    hourlyPlayer.pause();
+    setSoundButton('Enable Sound');
+    return;
+  }
+  syncHourlyAudio(new Date(), true);
+});
+hourlyPlayer.addEventListener('error', () => {
+  if (!soundEnabled) return;
+  soundEnabled = false;
+  setSoundButton(`Missing Track ${String(activeTrackIndex + 1).padStart(2, '0')}`);
+});
 
 // ── scale ──────────────────────────────────────────────────────
 function scaleCanvas() {
@@ -558,8 +688,7 @@ function loadMannequins(redraw) {
 }
 
 // ── 메인 ──────────────────────────────────────────────────────
-function clockMinutes() {
-  const now = new Date();
+function clockMinutes(now = new Date()) {
   return (now.getHours() % 12) * 60
     + now.getMinutes()
     + now.getSeconds() / 60
@@ -584,6 +713,8 @@ draw(curMin);
 const redraw = () => draw(editOn ? curMin : clockMinutes());
 loadBackgrounds(redraw);
 loadMannequins(redraw);
+initLamps();
+updateLamps();
 
 // ── 편집 모드 — 마네킹을 드래그해 위치 미세조정 ───────────────
 //   진입: 주소에 ?edit=1  또는  화면에서 키보드 'E' 누르기.
@@ -625,8 +756,13 @@ window.addEventListener('keydown', e => { if (e.key === 'e' || e.key === 'E') en
 
 // 실제 12시간 흐름에 맞춰 전체 화면을 갱신한다. 편집 모드에서는 11:59 상태를 고정한다.
 (function tick(){
+  const now = new Date();
   if (editOn) drawSeconds(curMin);
-  else draw(clockMinutes());
+  else {
+    draw(clockMinutes(now));
+    updateLamps(now);
+    syncHourlyAudio(now);
+  }
   requestAnimationFrame(tick);
 })();
 </script>

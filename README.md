@@ -18,6 +18,8 @@ portfolio.suhyeokhan.com/
 │   ├── project-3.html      #   - ScreenSaver Workshop redirect
 │   └── Screensaver_Clock/  #   - ScreenSaver Workshop 독립 실행 페이지
 │       ├── index.html
+│       ├── audio/          # 12시간별 반복 재생 음원
+│       ├── lamps/          # 10분 단위로 켜지는 전등 이미지
 │       ├── Background Source/
 │       └── wooden manequins/
 ├── visual-design/          # index.html + project-1~2.html
