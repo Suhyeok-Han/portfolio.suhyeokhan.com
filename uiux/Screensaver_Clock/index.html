@@ -834,41 +834,122 @@ updateLamps();
 
 // ── 편집 모드 — 마네킹을 드래그해 위치 미세조정 ───────────────
 //   진입: 주소에 ?edit=1  또는  화면에서 키보드 'E' 누르기.
-//   드래그하면 MAN_OFFSET 이 갱신되고, 좌하단 칸에 복붙용 스니펫이 표시된다.
+//   종료: 편집 중 다시 'E'. 드래그하면 MAN_OFFSET 이 갱신되고, 좌하단 칸에 복붙용 스니펫이 표시된다.
+let editMin = 719;
+let editPanel = null, editInfo = null, editControls = null, editSlider = null, editTimeLabel = null;
+let editDrag = null, editHandlersBound = false;
+
+function formatEditTime(min) {
+  const mm = Math.max(0, Math.min(719, Math.round(min)));
+  const h = Math.floor(mm / 60);
+  const m = mm % 60;
+  return `${String(h).padStart(2,'0')} : ${String(m).padStart(2,'0')}`;
+}
+function syncEditControls() {
+  if (editSlider) editSlider.value = String(Math.round(editMin));
+  if (editTimeLabel) editTimeLabel.textContent = formatEditTime(editMin);
+}
+function setEditMin(min) {
+  editMin = Math.max(0, Math.min(719, Number(min)));
+  draw(editMin);
+  syncEditControls();
+}
+function editDump() {
+  if (!editPanel) return;
+  const parts = MAN_ORDER.filter(n=>MAN_OFFSET[n])
+    .map(n=>`${n}:[${Math.round(MAN_OFFSET[n][0])},${Math.round(MAN_OFFSET[n][1])}]`);
+  editPanel.value = 'const MAN_OFFSET = { ' + parts.join(', ') + ' };';
+}
+function editToCanvas(e) {
+  const wrap = document.getElementById('canvas-wrapper');
+  const r = wrap.getBoundingClientRect();
+  const sc = r.width / W;
+  return [(e.clientX - r.left)/sc, (e.clientY - r.top)/sc];
+}
+function editHit(p) {
+  for (let i=MAN_ORDER.length-1;i>=0;i--){
+    const name=MAN_ORDER[i];
+    const [ax,ay]=manAnchor(name), bb=MAN_BBOX[name], s=manScale(name);
+    const w=(bb[2]-bb[0])*s, h=(bb[3]-bb[1])*s;
+    if (p[0]>=ax && p[0]<=ax+w && p[1]>=ay && p[1]<=ay+h) return name;
+  }
+  return null;
+}
+function bindEditHandlers() {
+  if (editHandlersBound) return;
+  editHandlersBound = true;
+  const wrap = document.getElementById('canvas-wrapper');
+  wrap.addEventListener('mousedown', e => {
+    if (!editOn) return;
+    const p=editToCanvas(e), name=editHit(p);
+    if (name){
+      editDrag = { name, sp:p, o0:(MAN_OFFSET[name]||[0,0]).slice() };
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('mousemove', e => {
+    if (!editOn || !editDrag) return;
+    const p=editToCanvas(e);
+    MAN_OFFSET[editDrag.name] = [
+      editDrag.o0[0]+(p[0]-editDrag.sp[0]),
+      editDrag.o0[1]+(p[1]-editDrag.sp[1])
+    ];
+    draw(editMin);
+    editDump();
+  });
+  window.addEventListener('mouseup', () => { editDrag=null; });
+}
+
 function enableEdit(){
   if (editOn) return; editOn = true;
-  draw(719);                       // 전부 보이게 11:59 로
-  const wrap = document.getElementById('canvas-wrapper');
-  const panel = document.createElement('textarea');
-  panel.style.cssText = 'position:fixed;left:8px;bottom:8px;width:520px;height:90px;z-index:99;'+
+  bindEditHandlers();
+  editMin = 719;                   // 전부 보이게 11:59 로 시작
+
+  editControls = document.createElement('div');
+  editControls.style.cssText = 'position:fixed;left:8px;bottom:106px;width:520px;z-index:99;'+
+    'display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.78);'+
+    'border:1px solid #333;padding:8px;color:#0f0;font:12px monospace;';
+  const label = document.createElement('span');
+  label.textContent = 'TIME';
+  editTimeLabel = document.createElement('span');
+  editTimeLabel.style.cssText = 'min-width:58px;text-align:right;';
+  editSlider = document.createElement('input');
+  editSlider.type = 'range';
+  editSlider.min = '0';
+  editSlider.max = '719';
+  editSlider.step = '1';
+  editSlider.style.cssText = 'flex:1;';
+  editSlider.addEventListener('input', () => setEditMin(editSlider.value));
+  editControls.appendChild(label);
+  editControls.appendChild(editSlider);
+  editControls.appendChild(editTimeLabel);
+  document.body.appendChild(editControls);
+
+  editPanel = document.createElement('textarea');
+  editPanel.style.cssText = 'position:fixed;left:8px;bottom:8px;width:520px;height:90px;z-index:99;'+
     'font:11px monospace;background:#111;color:#0f0;border:1px solid #333;';
-  document.body.appendChild(panel);
-  const info = document.createElement('div');
-  info.style.cssText = 'position:fixed;left:8px;top:8px;z-index:99;color:#0f0;font:13px monospace;'+
+  document.body.appendChild(editPanel);
+  editInfo = document.createElement('div');
+  editInfo.style.cssText = 'position:fixed;left:8px;top:8px;z-index:99;color:#0f0;font:13px monospace;'+
     'background:rgba(0,0,0,.7);padding:6px;';
-  info.textContent = '편집 모드: 마네킹을 드래그해 이동 → 아래 칸의 MAN_OFFSET 스니펫을 복사해 전달하세요.';
-  document.body.appendChild(info);
-  function toCanvas(e){ const r = wrap.getBoundingClientRect(); const sc = r.width / W;
-    return [(e.clientX - r.left)/sc, (e.clientY - r.top)/sc]; }
-  function hit(p){ for (let i=MAN_ORDER.length-1;i>=0;i--){ const name=MAN_ORDER[i];
-      const [ax,ay]=manAnchor(name), bb=MAN_BBOX[name], s=manScale(name);
-      const w=(bb[2]-bb[0])*s, h=(bb[3]-bb[1])*s;
-      if (p[0]>=ax && p[0]<=ax+w && p[1]>=ay && p[1]<=ay+h) return name; } return null; }
-  function dump(){ const parts = MAN_ORDER.filter(n=>MAN_OFFSET[n])
-      .map(n=>`${n}:[${Math.round(MAN_OFFSET[n][0])},${Math.round(MAN_OFFSET[n][1])}]`);
-    panel.value = 'const MAN_OFFSET = { ' + parts.join(', ') + ' };'; }
-  let drag = null;
-  wrap.addEventListener('mousedown', e => { const p=toCanvas(e), name=hit(p);
-    if (name){ drag = { name, sp:p, o0:(MAN_OFFSET[name]||[0,0]).slice() }; e.preventDefault(); } });
-  window.addEventListener('mousemove', e => { if(!drag) return; const p=toCanvas(e);
-    MAN_OFFSET[drag.name] = [drag.o0[0]+(p[0]-drag.sp[0]), drag.o0[1]+(p[1]-drag.sp[1])];
-    draw(719); dump(); });
-  window.addEventListener('mouseup', () => { drag=null; });
-  dump();
+  editInfo.textContent = '편집 모드: 드래그=마네킹 이동, 슬라이더=시간 확인, E=나가기. 아래 MAN_OFFSET 스니펫을 복사.';
+  document.body.appendChild(editInfo);
+  setEditMin(editMin);
+  editDump();
+}
+function disableEdit(){
+  if (!editOn) return;
+  editOn = false;
+  editDrag = null;
+  [editPanel, editInfo, editControls].forEach(el => { if (el) el.remove(); });
+  editPanel = editInfo = editControls = editSlider = editTimeLabel = null;
+  draw(clockMinutes());
 }
 // 진입 트리거: URL ?edit=1, 또는 키 'E'
 if (new URLSearchParams(location.search).get('edit')) enableEdit();
-window.addEventListener('keydown', e => { if (e.key === 'e' || e.key === 'E') enableEdit(); });
+window.addEventListener('keydown', e => {
+  if (e.key === 'e' || e.key === 'E') editOn ? disableEdit() : enableEdit();
+});
 
 // 실제 12시간 흐름에 맞춰 전체 화면을 갱신한다. 편집 모드에서는 11:59 상태를 고정한다.
 (function tick(){
