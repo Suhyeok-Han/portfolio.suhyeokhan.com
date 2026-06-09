@@ -373,8 +373,20 @@ function drawImageInQuad(ctx, img, sx,sy,sw,sh, quad) {
 function lerp(a,b,t){ return a+(b-a)*t; }
 function lerpPt(p1,p2,t){ return [lerp(p1[0],p2[0],t), lerp(p1[1],p2[1],t)]; }
 function easeInOut(t){ return t<0.5 ? 2*t*t : -1+(4-2*t)*t; }
+const CYCLE_MINUTES = 720;
+const OPEN_MAX_MIN = 719;
+const CLOSE_SECONDS = 20;
+const CLOSE_START_MIN = CYCLE_MINUTES - CLOSE_SECONDS / 60;
 // 진행도 — 선형(시간당 일정한 너비로 열리도록). 0..1
-function prog(min){ return Math.max(0, Math.min(1, min/719)); }
+function prog(min){ return Math.max(0, Math.min(1, min/OPEN_MAX_MIN)); }
+function visualMinutesFromCycle(min){
+  const cycle = Math.max(0, Math.min(CYCLE_MINUTES, Number(min) || 0));
+  if (cycle >= CLOSE_START_MIN) {
+    const closeT = (cycle - CLOSE_START_MIN) / (CYCLE_MINUTES - CLOSE_START_MIN);
+    return lerp(OPEN_MAX_MIN, 0, easeInOut(closeT));
+  }
+  return Math.min(OPEN_MAX_MIN, cycle);
+}
 
 function applyPath(ctx, poly) {
   ctx.beginPath();
@@ -389,7 +401,7 @@ const SHAPE_KP = [
 ];
 function getShape(min) {
   if (min <= 0)   return {...SHAPE_KP[0]};
-  if (min >= 719) return {...SHAPE_KP[1]};
+  if (min >= OPEN_MAX_MIN) return {...SHAPE_KP[1]};
   const e = prog(min);
   const f = SHAPE_KP[0], t = SHAPE_KP[1];
   return {
@@ -1021,15 +1033,18 @@ function loadMannequins(redraw) {
 }
 
 // ── 메인 ──────────────────────────────────────────────────────
-function clockMinutes(now = new Date()) {
+function clockCycleMinutes(now = new Date()) {
   return (now.getHours() % 12) * 60
     + now.getMinutes()
     + now.getSeconds() / 60
     + now.getMilliseconds() / 60000;
 }
-let curMin = clockMinutes();   // 현재 12시간 주기 위치(0..719.999)
+function clockMinutes(now = new Date()) {
+  return visualMinutesFromCycle(clockCycleMinutes(now));
+}
+let curMin = clockMinutes();   // 현재 문/빛에 적용되는 시각 위치(0..719)
 function draw(min) {
-  curMin = Math.max(0, Math.min(719.999, min));
+  curMin = Math.max(0, Math.min(OPEN_MAX_MIN, min));
   const shape = getShape(curMin);
   const polys = getLightPolygons(curMin, shape);
 
@@ -1057,24 +1072,29 @@ else updateLamps();
 // ── 편집 모드 — 마네킹을 드래그해 위치 미세조정 ───────────────
 //   진입: 주소에 ?edit=1  또는  화면에서 키보드 'E' 누르기.
 //   종료: 편집 중 다시 'E'. 드래그하면 MAN_OFFSET 이 갱신되고, 좌하단 칸에 복붙용 스니펫이 표시된다.
-let editMin = 719;
+let editMin = OPEN_MAX_MIN;
 let editPanel = null, editInfo = null, editControls = null, editSlider = null, editTimeLabel = null;
 let editDrag = null, editHandlersBound = false;
 
 function formatEditTime(min) {
-  const mm = Math.max(0, Math.min(719, Math.round(min)));
-  const h = Math.floor(mm / 60);
-  const m = mm % 60;
-  return `${String(h).padStart(2,'0')} : ${String(m).padStart(2,'0')}`;
+  const clamped = Math.max(0, Math.min(CYCLE_MINUTES, Number(min) || 0));
+  const totalSeconds = clamped >= CYCLE_MINUTES
+    ? 0
+    : Math.floor(clamped * 60);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const closeLabel = clamped >= CLOSE_START_MIN && clamped < CYCLE_MINUTES ? ' CLOSE' : '';
+  return `${String(h).padStart(2,'0')} : ${String(m).padStart(2,'0')} : ${String(s).padStart(2,'0')}${closeLabel}`;
 }
 function syncEditControls() {
-  if (editSlider) editSlider.value = String(Math.round(editMin));
+  if (editSlider) editSlider.value = editMin.toFixed(2);
   if (editTimeLabel) editTimeLabel.textContent = formatEditTime(editMin);
 }
 function setEditMin(min) {
-  editMin = Math.max(0, Math.min(719, Number(min)));
+  editMin = Math.max(0, Math.min(CYCLE_MINUTES, Number(min) || 0));
   updateLampsForMinute(editMin);
-  draw(editMin);
+  draw(visualMinutesFromCycle(editMin));
   syncEditControls();
 }
 function editDump() {
@@ -1117,16 +1137,23 @@ function bindEditHandlers() {
       editDrag.o0[0]+(p[0]-editDrag.sp[0]),
       editDrag.o0[1]+(p[1]-editDrag.sp[1])
     ];
-    draw(editMin);
+    draw(visualMinutesFromCycle(editMin));
     editDump();
   });
   window.addEventListener('mouseup', () => { editDrag=null; });
 }
 
-function enableEdit(){
+function editStartFromQuery(value) {
+  if (value === null || value === '' || value === '1' || value === 'true') return OPEN_MAX_MIN;
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? Math.max(0, Math.min(CYCLE_MINUTES, parsed))
+    : OPEN_MAX_MIN;
+}
+function enableEdit(startMin = OPEN_MAX_MIN){
   if (editOn) return; editOn = true;
   bindEditHandlers();
-  editMin = 719;                   // 전부 보이게 11:59 로 시작
+  editMin = startMin;              // 기본은 전부 보이게 11:59:00 으로 시작
 
   editControls = document.createElement('div');
   editControls.style.cssText = 'position:fixed;left:8px;bottom:106px;width:520px;z-index:99;'+
@@ -1135,12 +1162,12 @@ function enableEdit(){
   const label = document.createElement('span');
   label.textContent = 'TIME';
   editTimeLabel = document.createElement('span');
-  editTimeLabel.style.cssText = 'min-width:58px;text-align:right;';
+  editTimeLabel.style.cssText = 'min-width:118px;text-align:right;';
   editSlider = document.createElement('input');
   editSlider.type = 'range';
   editSlider.min = '0';
-  editSlider.max = '719';
-  editSlider.step = '1';
+  editSlider.max = String(CYCLE_MINUTES);
+  editSlider.step = '0.01';
   editSlider.style.cssText = 'flex:1;';
   editSlider.addEventListener('input', () => setEditMin(editSlider.value));
   editControls.appendChild(label);
@@ -1155,7 +1182,7 @@ function enableEdit(){
   editInfo = document.createElement('div');
   editInfo.style.cssText = 'position:fixed;left:8px;top:8px;z-index:99;color:#0f0;font:13px monospace;'+
     'background:rgba(0,0,0,.7);padding:6px;';
-  editInfo.textContent = '편집 모드: 드래그=마네킹 이동, 슬라이더=시간 확인, E=나가기. 아래 MAN_OFFSET 스니펫을 복사.';
+  editInfo.textContent = '편집 모드: 드래그=마네킹 이동, 슬라이더=시간/닫힘 모션 확인, E=나가기. 아래 MAN_OFFSET 스니펫을 복사.';
   document.body.appendChild(editInfo);
   setEditMin(editMin);
   editDump();
@@ -1168,13 +1195,14 @@ function disableEdit(){
   editPanel = editInfo = editControls = editSlider = editTimeLabel = null;
   draw(clockMinutes());
 }
-// 진입 트리거: URL ?edit=1, 또는 키 'E'
-if (new URLSearchParams(location.search).get('edit')) enableEdit();
+// 진입 트리거: URL ?edit=1 / ?edit=719.90, 또는 키 'E'
+const editQuery = new URLSearchParams(location.search).get('edit');
+if (editQuery !== null) enableEdit(editStartFromQuery(editQuery));
 window.addEventListener('keydown', e => {
   if (e.key === 'e' || e.key === 'E') editOn ? disableEdit() : enableEdit();
 });
 
-// 실제 12시간 흐름에 맞춰 전체 화면을 갱신한다. 편집 모드에서는 11:59 상태를 고정한다.
+// 실제 12시간 흐름에 맞춰 전체 화면을 갱신한다. 편집 모드에서는 슬라이더 상태를 고정한다.
 (function tick(){
   const now = new Date();
   if (editOn) {
