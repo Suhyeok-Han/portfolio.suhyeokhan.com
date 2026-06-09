@@ -34,7 +34,7 @@
      2. glow-canvas  — 빛 경계 번짐 (screen)
      3. struct-canvas— 상단 그림자 바 + 벽(이미지) + 문(원근 워프)+두께
      4. man-canvas   — 나무 마네킹 (multiply: 빛 위에서만 또렷이 보임)
-     5. sweep-canvas — 초침 공 바닥 그림자 (multiply)
+     5. sweep-canvas — 램프/초침 공 바닥 그림자 (multiply)
      6. ball-canvas  — 초침 = 굴러가는 공
   */
   #floor-canvas { z-index: 1; }
@@ -105,11 +105,6 @@
   .clock-lamp.is-missing {
     display: none;
   }
-  .clock-lamp:nth-child(1) { right: 352px; bottom: 106px; --lamp-w: 118px; transform: rotate(-5deg); }
-  .clock-lamp:nth-child(2) { right: 270px; bottom:  74px; --lamp-w: 128px; transform: rotate( 3deg); }
-  .clock-lamp:nth-child(3) { right: 184px; bottom: 116px; --lamp-w: 120px; transform: rotate(-2deg); }
-  .clock-lamp:nth-child(4) { right: 108px; bottom:  84px; --lamp-w: 132px; transform: rotate( 4deg); }
-  .clock-lamp:nth-child(5) { right:  40px; bottom: 134px; --lamp-w: 116px; transform: rotate(-4deg); }
 
   #sound-toggle {
     position: fixed;
@@ -191,13 +186,34 @@ let soundEnabled = false;
 let activeTrackIndex = -1;
 let activeLampCount = -1;
 let lampNodes = [];
+let lampLayout = [];
+
+// 문이 이동하며 생긴 빈 공간과 주변 어두운 여백 안의 후보 위치.
+// init 시 마네킹 bbox와 겹치지 않는 후보만 골라 5개의 10분 램프를 배치한다.
+const LAMP_CANDIDATES = [
+  {x:510,y:1160,w:58,r:-4}, {x:765,y:1030,w:58,r: 3}, {x:875,y:1230,w:58,r:-3},
+  {x:690,y:1540,w:58,r: 5}, {x:490,y:1620,w:58,r:-5}, {x:530,y:1300,w:52,r: 4},
+  {x:610,y:1320,w:52,r:-2}, {x:720,y:1540,w:52,r: 2}, {x:880,y:1420,w:50,r:-4},
+  {x:515,y:1440,w:50,r: 4}, {x:910,y:1080,w:50,r: 3}, {x:690,y:1320,w:48,r:-5}
+];
+const LAMP_IMG_RATIO = 420 / 235;
+const LAMP_BODY_SHADOW_ALPHA = 0.42;      // 문빛이 램프 물체에 만드는 짧은 그림자
+const LAMP_BODY_SHADOW_STRETCH = 1.05;
+const LAMP_BODY_SHADOW_WIDEN = 0.9;
+const LAMP_CAST_ALPHA = 0.34;             // 켜진 램프빛이 마네킹에 만드는 보조 그림자
+const LAMP_CAST_REACH = 430;
+const LAMP_CAST_STRETCH = 0.78;
+const LAMP_CAST_WIDEN = 1.28;
 
 function hourTrackIndex(date = new Date()) {
   const hour12 = date.getHours() % 12;
   return hour12 === 0 ? 11 : hour12 - 1;
 }
 function minuteLampCount(date = new Date()) {
-  return Math.max(0, Math.min(5, Math.floor(date.getMinutes() / 10)));
+  return lampCountForMinute(date.getMinutes());
+}
+function lampCountForMinute(min) {
+  return Math.max(0, Math.min(5, Math.floor((Math.max(0, min) % 60) / 10)));
 }
 function initLamps() {
   const layer = document.getElementById('lamp-layer');
@@ -213,12 +229,19 @@ function initLamps() {
     layer.appendChild(lamp);
     return lamp;
   });
+  layoutLamps();
+  activeLampCount = -1;
 }
-function updateLamps(date = new Date()) {
-  const count = minuteLampCount(date);
+function updateLampCount(count) {
   if (count === activeLampCount) return;
   activeLampCount = count;
   lampNodes.forEach((lamp, i) => lamp.classList.toggle('is-on', i < count));
+}
+function updateLamps(date = new Date()) {
+  updateLampCount(minuteLampCount(date));
+}
+function updateLampsForMinute(min) {
+  updateLampCount(lampCountForMinute(min));
 }
 function setSoundButton(label, playing = false) {
   soundToggle.textContent = label;
@@ -610,22 +633,118 @@ function drawBallShadow(min, polys){
   sfCtx.fill();
   sfCtx.restore();
 
+  buildFloorLightMask(polys);
+
+  maskShadowToFloorLight();
+
+  sweepCtx.drawImage(sfCanvas, 0, 0);
+}
+function buildFloorLightMask(polys){
   lmCtx.clearRect(0,0,W,H);
   fillLightUnion(lmCtx, polys, '#fff');
   lmCtx.globalCompositeOperation = 'destination-in';
   lmCtx.fillStyle = '#fff';
   lmCtx.fillRect(0, SWEEP_BAR_H, W, H - SWEEP_BAR_H);
   lmCtx.globalCompositeOperation = 'source-over';
-
+}
+function maskShadowToFloorLight(){
   sfCtx.save();
   sfCtx.globalCompositeOperation = 'destination-in';
   sfCtx.drawImage(lmCanvas, 0, 0);
+  sfCtx.restore();
+}
+function drawLampShadows(polys){
+  if (!polys || !lampLayout.length) return;
+
+  buildFloorLightMask(polys);
+
+  activeLitLamps(polys).forEach(({p, base}) => {
+    const len = p.w * LAMP_IMG_RATIO * LAMP_BODY_SHADOW_STRETCH;
+    const wid = p.w * LAMP_BODY_SHADOW_WIDEN;
+    const ang = Math.atan2(base[1]-MAN_LIGHT[1], base[0]-MAN_LIGHT[0]);
+
+    sfCtx.clearRect(0,0,W,H);
+    sfCtx.save();
+    sfCtx.translate(base[0], base[1]);
+    sfCtx.rotate(ang + Math.PI/2);
+    sfCtx.filter = 'blur(4px)';
+    const g = sfCtx.createLinearGradient(0, 0, 0, -len);
+    g.addColorStop(0, `rgba(0,0,0,${LAMP_BODY_SHADOW_ALPHA})`);
+    g.addColorStop(0.46, `rgba(0,0,0,${LAMP_BODY_SHADOW_ALPHA * 0.3})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    sfCtx.fillStyle = g;
+    sfCtx.beginPath();
+    sfCtx.ellipse(0, -len/2, wid/2, len/2, 0, 0, Math.PI*2);
+    sfCtx.fill();
+    sfCtx.restore();
+
+    maskShadowToFloorLight();
+    sweepCtx.drawImage(sfCanvas, 0, 0);
+  });
+
+  MAN_ORDER.forEach(name => {
+    if (!manHasFloorLight(name, polys)) return;
+    nearestLampSources(name, polys).forEach(src => drawLampCastManShadow(name, src));
+  });
+}
+function drawLampCastManShadow(name, src){
+  const img = manImgs[name];
+  if (!img || !img.complete || !img.naturalWidth) return;
+
+  const [fx, fy] = manFeet(name);
+  const bb = MAN_BBOX[name], s = manScale(name);
+  const ow = (bb[2]-bb[0]) * s;
+  const oh = (bb[3]-bb[1]) * s;
+  const dist = Math.hypot(fx - src.light[0], fy - src.light[1]);
+  const falloff = Math.max(0, Math.min(1, 1 - dist / LAMP_CAST_REACH));
+  if (falloff <= 0) return;
+
+  const len = oh * (LAMP_CAST_STRETCH + falloff * 0.32);
+  const sw = Math.max(1, Math.ceil(ow * LAMP_CAST_WIDEN));
+  const sh = Math.max(1, Math.ceil(len));
+  const alpha = LAMP_CAST_ALPHA * (0.42 + falloff * 0.58);
+  const ang = Math.atan2(fy - src.light[1], fx - src.light[0]);
+
+  silCanvas.width = sw; silCanvas.height = sh;
+  silCtx.clearRect(0,0,sw,sh);
+  silCtx.drawImage(img, bb[0],bb[1], bb[2]-bb[0], bb[3]-bb[1], 0,0, sw, sh);
+  silCtx.globalCompositeOperation = 'source-in';
+  silCtx.fillStyle = '#000';
+  silCtx.fillRect(0,0,sw,sh);
+  silCtx.globalCompositeOperation = 'destination-in';
+  const gg = silCtx.createLinearGradient(0, sh, 0, 0);
+  gg.addColorStop(0, `rgba(0,0,0,${alpha})`);
+  gg.addColorStop(0.42, `rgba(0,0,0,${alpha * 0.46})`);
+  gg.addColorStop(1, 'rgba(0,0,0,0)');
+  silCtx.fillStyle = gg;
+  silCtx.fillRect(0,0,sw,sh);
+  silCtx.globalCompositeOperation = 'source-over';
+
+  const feetSilX = (MAN_FEET[name][0]-bb[0]) * (sw / (bb[2]-bb[0]));
+  sfCtx.clearRect(0,0,W,H);
+  sfCtx.save();
+  sfCtx.translate(fx, fy);
+  sfCtx.rotate(ang + Math.PI/2);
+  sfCtx.filter = 'blur(6px)';
+  sfCtx.drawImage(silCanvas, -feetSilX, -sh, sw, sh);
+  sfCtx.restore();
+
+  maskShadowToFloorLight();
+  sfCtx.save();
+  sfCtx.globalCompositeOperation = 'destination-in';
+  const rg = sfCtx.createRadialGradient(src.light[0], src.light[1], 0, src.light[0], src.light[1], LAMP_CAST_REACH);
+  rg.addColorStop(0, 'rgba(0,0,0,1)');
+  rg.addColorStop(0.62, 'rgba(0,0,0,.58)');
+  rg.addColorStop(1, 'rgba(0,0,0,0)');
+  sfCtx.fillStyle = rg;
+  sfCtx.fillRect(0, SWEEP_BAR_H, W, H - SWEEP_BAR_H);
   sfCtx.restore();
 
   sweepCtx.drawImage(sfCanvas, 0, 0);
 }
 function drawSeconds(min, polys){
   sweepCtx.clearRect(0,0,W,H);
+  drawLampShadows(polys);
   drawBallShadow(min, polys);
   drawBall(min);
 }
@@ -727,6 +846,107 @@ function manScale(name){ return MAN_PLACE[name].scale; }
 function manAnchor(name){ const o = MAN_OFFSET[name] || [0,0];
   return [MAN_PLACE[name].x + o[0], MAN_PLACE[name].y + o[1]]; }
 
+function manObjectBox(name, pad = 0){
+  const [ax,ay] = manAnchor(name), bb = MAN_BBOX[name], s = manScale(name);
+  const dx = ax - bb[0]*s, dy = ay - bb[1]*s;
+  return [
+    dx - pad,
+    dy - pad,
+    dx + (bb[2]-bb[0])*s + pad,
+    dy + (bb[3]-bb[1])*s + pad
+  ];
+}
+function rectOverlap(a, b){
+  return Math.max(0, Math.min(a[2],b[2]) - Math.max(a[0],b[0])) *
+         Math.max(0, Math.min(a[3],b[3]) - Math.max(a[1],b[1]));
+}
+function manObjectBoxes(pad = 14){
+  return MAN_ORDER.map(name => manObjectBox(name, pad));
+}
+function manHasFloorLight(name, polys){
+  if (!polys) return false;
+  const box = manObjectBox(name, 0);
+  const pts = [
+    manFeet(name),
+    [(box[0]+box[2])/2, (box[1]+box[3])/2],
+    [box[0],box[1]], [box[2],box[1]], [box[0],box[3]], [box[2],box[3]]
+  ];
+  return pts.some(pt => isPointLit(pt, polys));
+}
+function nearestLampSources(name, polys){
+  const [fx, fy] = manFeet(name);
+  return activeLampSources()
+    .map(src => ({...src, d: Math.hypot(fx - src.light[0], fy - src.light[1])}))
+    .filter(src => src.d <= LAMP_CAST_REACH)
+    .sort((a,b) => a.d - b.d)
+    .slice(0, 2);
+}
+function lampBox(lamp){
+  const h = lamp.w * LAMP_IMG_RATIO;
+  return [lamp.x, lamp.y, lamp.x + lamp.w, lamp.y + h];
+}
+function lampBase(lamp){
+  return [lamp.x + lamp.w/2, lamp.y + lamp.w*LAMP_IMG_RATIO*0.92];
+}
+function lampLightPoint(lamp){
+  return [lamp.x + lamp.w*0.64, lamp.y + lamp.w*LAMP_IMG_RATIO*0.32];
+}
+function layoutLamps(){
+  if (!lampNodes.length) return;
+  const blocked = manObjectBoxes(18);
+  const chosen = [];
+  LAMP_CANDIDATES.forEach(c => {
+    if (chosen.length >= lampNodes.length) return;
+    const box = lampBox(c);
+    const overlapsMan = blocked.some(b => rectOverlap(box, b) > 8);
+    const overlapsLamp = chosen.some(l => rectOverlap(box, lampBox(l)) > 8);
+    const offStage = box[0] < 0 || box[1] < 400 || box[2] > W || box[3] > H;
+    if (!overlapsMan && !overlapsLamp && !offStage) chosen.push(c);
+  });
+  while (chosen.length < lampNodes.length) chosen.push(LAMP_CANDIDATES[chosen.length]);
+  lampLayout = chosen.slice(0, lampNodes.length);
+  lampNodes.forEach((lamp, i) => {
+    const p = lampLayout[i];
+    lamp.style.left = `${p.x}px`;
+    lamp.style.top = `${p.y}px`;
+    lamp.style.right = 'auto';
+    lamp.style.bottom = 'auto';
+    lamp.style.setProperty('--lamp-w', `${p.w}px`);
+    lamp.style.transform = `rotate(${p.r}deg)`;
+  });
+}
+function isPointLit(pt, polys){
+  if (!polys) return false;
+  return ptInPoly(pt, polys.rightPoly) ||
+    ptInPoly(pt, polys.leftPoly) ||
+    (polys.cornerTri && ptInPoly(pt, polys.cornerTri));
+}
+function activeLampSources(){
+  return lampLayout.map((p, i) => ({
+    p,
+    node: lampNodes[i],
+    base: lampBase(p),
+    light: lampLightPoint(p)
+  })).filter(src =>
+    src.node &&
+    src.node.classList.contains('is-on')
+  );
+}
+function activeLitLamps(polys){
+  if (!polys) return [];
+  return activeLampSources().filter(src =>
+    isPointLit(src.base, polys) || isPointLit(src.light, polys)
+  );
+}
+function updateLampLight(polys){
+  lampNodes.forEach((lamp, i) => {
+    const p = lampLayout[i];
+    lamp.classList.toggle('is-lit', !!p && (
+      isPointLit(lampBase(p), polys) || isPointLit(lampLightPoint(p), polys)
+    ));
+  });
+}
+
 // 발밑 그림자 — 빛(=문 쪽)의 반대 방향으로, 발에 가까울수록 어두운 그라디언트.
 const MAN_LIGHT = [1000, 100];   // 빛/문 기준점 (그림자는 이 반대쪽으로)
 function manFeet(name){
@@ -817,6 +1037,7 @@ function draw(min) {
   drawGlow(polys);
   drawStruct(shape);
   drawMannequins(polys);
+  updateLampLight(polys);
   drawSeconds(curMin, polys);
 }
 
@@ -830,7 +1051,8 @@ loadBackgrounds(() => {
   schedule(() => loadMannequins(redraw));
 });
 initLamps();
-updateLamps();
+if (editOn) updateLampsForMinute(curMin);
+else updateLamps();
 
 // ── 편집 모드 — 마네킹을 드래그해 위치 미세조정 ───────────────
 //   진입: 주소에 ?edit=1  또는  화면에서 키보드 'E' 누르기.
@@ -851,6 +1073,7 @@ function syncEditControls() {
 }
 function setEditMin(min) {
   editMin = Math.max(0, Math.min(719, Number(min)));
+  updateLampsForMinute(editMin);
   draw(editMin);
   syncEditControls();
 }
@@ -959,8 +1182,8 @@ window.addEventListener('keydown', e => {
     drawSeconds(curMin, getLightPolygons(curMin, shape));
   }
   else {
-    draw(clockMinutes(now));
     updateLamps(now);
+    draw(clockMinutes(now));
     syncHourlyAudio(now);
   }
   requestAnimationFrame(tick);
