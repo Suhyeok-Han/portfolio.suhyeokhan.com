@@ -2,396 +2,262 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>시침질 (Basting) — Web Maze — Visual Design — Suhyeok Han</title>
+<meta name="description" content="시침질 — an interactive web maze. Visual Design by Suhyeok Han.">
 <style>
 /* ============================================================
-   시침질 (Basting) — Figma "Wire Frame" page ported to a single
-   self-contained HTML maze prototype.
-   All frame + connection data lives in the FRAMES object (see <script>).
+   시침질 (Basting) — Figma "Wire Frame" prototype, ported as an
+   image-based interactive maze. Real frame renders live in
+   ./p1-assets/<id>.png ; all frame + connection data is in the
+   FRAMES object below. No route is revealed to the visitor.
    ============================================================ */
 :root{
-  --ink:#1c1c1c; --muted:#8a8a8a; --line:#cfcfcf; --line2:#e6e6e6;
-  --accent:#e8a33d; --accent2:#d8643a; --paper:#ffffff; --bg:#f4f2ee;
-  --screenW:300px; --screenH:650px;          /* portrait inner screen */
-  --rotMs:900ms;
+  --bg:#0d0d0f; --stagebg:#111114;
+  --rotMs:820ms; --scn-w:390; --scn-h:844;   /* logical portrait screen */
 }
 *{box-sizing:border-box;}
-html,body{height:100%;}
+html,body{height:100%;margin:0;}
 body{
-  margin:0; background:var(--bg);
+  background:var(--stagebg); overflow:hidden;
   font-family:-apple-system,"Helvetica Neue","Apple SD Gothic Neo","Noto Sans KR",Arial,sans-serif;
-  color:var(--ink); display:flex; min-height:100vh;
+  color:#eee; -webkit-tap-highlight-color:transparent;
 }
 
-/* ---------- left: maze map / HUD ---------- */
-#hud{
-  width:280px; flex:0 0 280px; padding:22px 20px; border-right:1px solid var(--line2);
-  background:#faf9f7; overflow:auto; font-size:13px;
-}
-#hud h1{font-size:17px; margin:0 0 2px;}
-#hud .sub{color:var(--muted); margin:0 0 16px; font-size:12px; line-height:1.5;}
-#hud .now{font-size:12px; color:var(--muted); margin-bottom:4px;}
-#hud .nowname{font-size:15px; font-weight:600; margin-bottom:14px;}
-#hud .ori{display:inline-block; font-size:11px; padding:1px 7px; border:1px solid var(--line);
-  border-radius:10px; color:var(--muted); margin-left:6px; vertical-align:middle;}
-.btnrow{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
-.ctl{font:inherit; font-size:12px; border:1px solid var(--line); background:#fff; color:var(--ink);
-  padding:6px 11px; border-radius:8px; cursor:pointer;}
-.ctl:hover{border-color:var(--ink);}
-#hud .legend{font-size:11px; color:var(--muted); line-height:1.7; border-top:1px solid var(--line2);
-  padding-top:14px; margin-top:6px;}
-#trail{font-size:11px; color:var(--muted); line-height:1.6; word-break:keep-all;}
-#trail b{color:var(--ink); font-weight:600;}
-
-/* ---------- center: device stage ---------- */
-#stage{flex:1; display:flex; align-items:center; justify-content:center; padding:30px; overflow:hidden;}
-#scaler{transition:transform var(--rotMs) cubic-bezier(.7,0,.2,1);}
+/* ---------- stage / device ---------- */
+#stage{position:fixed; inset:0; display:flex; align-items:center; justify-content:center;}
+#scaler{transition:transform var(--rotMs) cubic-bezier(.6,0,.2,1);}
 
 .device{
-  position:relative; width:calc(var(--screenW) + 26px); height:calc(var(--screenH) + 26px);
-  background:#111; border-radius:46px; padding:13px;
-  box-shadow:0 26px 60px rgba(0,0,0,.28), inset 0 0 0 2px #2a2a2a;
-  transition:transform var(--rotMs) cubic-bezier(.7,0,.2,1);
-  transform:rotate(0deg);
+  position:relative; background:#0a0a0a; border-radius:54px; padding:15px;
+  box-shadow:0 30px 70px rgba(0,0,0,.5), inset 0 0 0 2px #232323, 0 0 0 1px #000;
 }
-.device.landscape{transform:rotate(90deg);}
-.device .notch{
-  position:absolute; top:13px; left:50%; transform:translateX(-50%);
-  width:120px; height:22px; background:#111; border-radius:0 0 14px 14px; z-index:5;
-}
+.device .notch{position:absolute; top:15px; left:50%; transform:translateX(-50%);
+  width:128px; height:24px; background:#0a0a0a; border-radius:0 0 16px 16px; z-index:6;}
+.device.landscape .notch{top:50%; left:15px; transform:translateY(-50%) rotate(90deg); transform-origin:center;}
+
 .viewport{
-  position:relative; width:var(--screenW); height:var(--screenH);
-  background:var(--paper); border-radius:34px; overflow:hidden;
+  position:relative; width:var(--vw); height:var(--vh);
+  background:#000; border-radius:38px; overflow:hidden;
 }
-/* counter-rotating canvas keeps content upright (real-phone auto-rotate behaviour) */
-.canvas{
-  position:absolute; top:50%; left:50%;
-  width:var(--screenW); height:var(--screenH);
-  transform:translate(-50%,-50%) rotate(0deg);
-  transition:transform var(--rotMs) cubic-bezier(.7,0,.2,1);
+.device.landscape .viewport{border-radius:30px;}
+
+/* one-shot rotation animation (rests at transform:none so scroll stays normal) */
+@keyframes spinFromPortrait{ from{transform:rotate(-90deg);} to{transform:rotate(0deg);} }
+@keyframes spinFromLandscape{ from{transform:rotate(90deg);} to{transform:rotate(0deg);} }
+.device.spin-l{animation:spinFromPortrait var(--rotMs) cubic-bezier(.6,0,.2,1);}
+.device.spin-p{animation:spinFromLandscape var(--rotMs) cubic-bezier(.6,0,.2,1);}
+
+/* ---------- screens ---------- */
+.scn{position:absolute; inset:0; overflow-y:auto; overflow-x:hidden; background:#000;
+  -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+.scn::-webkit-scrollbar{display:none;}
+.scn .frame{position:relative; width:100%;}      /* height set per image aspect */
+.scn img{display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none;}
+.hot{position:absolute; cursor:pointer; border-radius:6px; transition:background .15s, box-shadow .15s;}
+.hot:hover{background:rgba(232,163,61,.10); box-shadow:0 0 0 1.5px rgba(232,163,61,.55) inset;}
+body.hints .hot{box-shadow:0 0 0 1.5px rgba(232,163,61,.5) inset; background:rgba(232,163,61,.06);}
+
+/* transition layers */
+.scn.enter{opacity:0;}
+.scn.run.fade{opacity:1; transition:opacity var(--tdur,420ms) ease;}
+.scn.leave.fade{opacity:0; transition:opacity var(--tdur,420ms) ease;}
+.scn.enter.sl{opacity:1;} .scn.enter.slL{transform:translateX(100%);} .scn.enter.slR{transform:translateX(-100%);}
+.scn.enter.slT{transform:translateY(100%);} .scn.enter.slB{transform:translateY(-100%);}
+.scn.run.sl{transform:translate(0,0); transition:transform var(--tdur,420ms) cubic-bezier(.4,0,.2,1);}
+.scn.leave.slL{transform:translateX(-100%);} .scn.leave.slR{transform:translateX(100%);}
+.scn.leave.slT{transform:translateY(-100%);} .scn.leave.slB{transform:translateY(100%);}
+.scn.leave.sl{transition:transform var(--tdur,420ms) cubic-bezier(.4,0,.2,1);}
+
+/* ---------- minimal controls ---------- */
+#bar{position:fixed; top:14px; left:14px; z-index:40; display:flex; gap:8px;}
+.cbtn{width:38px; height:38px; border-radius:11px; border:1px solid #2c2c30; background:rgba(20,20,22,.72);
+  color:#ddd; font-size:15px; cursor:pointer; backdrop-filter:blur(6px); display:flex; align-items:center;
+  justify-content:center;}
+.cbtn:hover{border-color:#555; color:#fff;}
+#panel{position:fixed; top:0; left:0; height:100%; width:240px; z-index:45; background:rgba(16,16,18,.96);
+  border-right:1px solid #232327; padding:22px 18px; transform:translateX(-105%);
+  transition:transform .3s cubic-bezier(.4,0,.2,1); backdrop-filter:blur(8px);}
+#panel.open{transform:translateX(0);}
+#panel h1{font-size:16px; margin:0 0 2px;}
+#panel .sub{color:#888; font-size:11.5px; line-height:1.6; margin:0 0 18px;}
+#panel .row{display:flex; gap:8px; margin-bottom:10px;}
+#panel button{flex:1; font:inherit; font-size:12px; background:#1c1c20; border:1px solid #2c2c30; color:#ddd;
+  padding:8px; border-radius:8px; cursor:pointer;}
+#panel button:hover{border-color:#555; color:#fff;}
+#panel label{display:flex; align-items:center; gap:8px; font-size:12px; color:#aaa; margin-top:12px; cursor:pointer;}
+#panel .hint{font-size:11px; color:#666; line-height:1.6; border-top:1px solid #232327; padding-top:14px; margin-top:18px;}
+#scrim{position:fixed; inset:0; z-index:44; background:rgba(0,0,0,.4); opacity:0; pointer-events:none;
+  transition:opacity .3s;}
+#scrim.on{opacity:1; pointer-events:auto;}
+
+/* ---------- mobile: full-bleed screen only (no bezel) ---------- */
+@media (max-width:760px), (pointer:coarse){
+  #stage{padding:0;}
+  #scaler{transform:none !important; width:100vw; height:100vh; height:100dvh;}
+  .device{padding:0; border-radius:0; box-shadow:none; width:100vw; height:100vh; height:100dvh;}
+  .device .notch{display:none;}
+  .viewport{width:100vw !important; height:100vh !important; height:100dvh !important; border-radius:0 !important;}
+  .device.spin-l, .device.spin-p{animation:none;}   /* user rotates real phone */
 }
-.device.landscape .canvas{
-  width:var(--screenH); height:var(--screenW);
-  transform:translate(-50%,-50%) rotate(-90deg);
-}
-
-/* ---------- a single screen inside the canvas ---------- */
-.screen{position:absolute; inset:0; background:var(--paper); overflow:hidden;}
-.screen .statusbar{position:absolute; top:0; left:0; right:0; height:26px; display:flex;
-  align-items:center; justify-content:space-between; padding:0 16px; font-size:10px; color:#aaa; z-index:3;}
-.ph{ /* wireframe image placeholder */
-  position:absolute; border:1px dashed var(--line); border-radius:10px; background:
-   repeating-linear-gradient(45deg,#fafafa,#fafafa 7px,#f1f1f1 7px,#f1f1f1 14px);
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
-  color:var(--muted);
-}
-.ph .ico{font-size:30px; filter:grayscale(.2);}
-.ph .lab{font-size:10px; letter-spacing:.02em;}
-.cap{position:absolute; transform:translate(-50%,-50%); text-align:center; width:84%;
-  line-height:1.5; word-break:keep-all; white-space:pre-line; color:var(--ink);}
-
-/* tap-to-continue full hotspot */
-.taplayer{position:absolute; inset:0; cursor:pointer; z-index:4;}
-.taphint{position:absolute; transform:translate(-50%,-50%); z-index:5; pointer-events:none;
-  display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--accent2);
-  font-size:12px;}
-.taphint .dot{width:54px; height:54px; border-radius:50%; border:2px solid var(--accent);
-  display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--accent2);
-  animation:pulse 1.4s ease-out infinite;}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,163,61,.5);}100%{box-shadow:0 0 0 16px rgba(232,163,61,0);}}
-
-/* rotate cue (frame 6) */
-.rotcue{position:absolute; left:50%; top:74%; transform:translate(-50%,-50%); z-index:6;
-  display:flex; flex-direction:column; align-items:center; gap:10px; pointer-events:none;}
-.rotcue .ring{width:74px; height:74px; border-radius:50%; border:2px dashed var(--accent2);
-  display:flex; align-items:center; justify-content:center; font-size:13px; color:var(--accent2);
-  animation:spin 3.2s linear infinite;}
-.rotcue .ring span{animation:spin 3.2s linear infinite reverse;}
-@keyframes spin{to{transform:rotate(360deg);}}
-.rotcue .msg{font-size:11px; color:var(--muted);}
-
-/* branch buttons (visible maze choices) */
-.branches{position:absolute; left:0; right:0; bottom:14px; display:flex; flex-wrap:wrap; gap:6px;
-  justify-content:center; padding:0 12px; z-index:7;}
-.branch{font:inherit; font-size:11px; border:1px solid var(--ink); background:#fff; color:var(--ink);
-  padding:6px 10px; border-radius:16px; cursor:pointer; max-width:90%; word-break:keep-all;}
-.branch:hover{background:var(--ink); color:#fff;}
-.branch .arr{color:var(--accent2); margin-right:3px;}
-.branch:hover .arr{color:#fff;}
-
-/* ---------- transitions between screens ---------- */
-.screen.enter{opacity:0;}
-.screen.enter.fade{opacity:0;}
-.screen.run.fade{opacity:1; transition:opacity var(--tdur,400ms) ease;}
-.screen.leave.fade{opacity:0; transition:opacity var(--tdur,400ms) ease;}
-
-.screen.enter.slideL{transform:translateX(100%);}
-.screen.enter.slideR{transform:translateX(-100%);}
-.screen.enter.slideB{transform:translateY(100%);}
-.screen.run.slideL,.screen.run.slideR,.screen.run.slideB{transform:translate(0,0);
-  transition:transform var(--tdur,400ms) cubic-bezier(.4,0,.2,1);}
-.screen.leave.slideL{transform:translateX(-100%); transition:transform var(--tdur,400ms) cubic-bezier(.4,0,.2,1);}
-.screen.leave.slideR{transform:translateX(100%); transition:transform var(--tdur,400ms) cubic-bezier(.4,0,.2,1);}
-.screen.leave.slideB{transform:translateY(-100%); transition:transform var(--tdur,400ms) cubic-bezier(.4,0,.2,1);}
-
-/* portfolio integration */
-.pfnav{display:flex; gap:8px; margin-bottom:16px;}
-.pfnav a{font-size:11px; color:var(--muted); text-decoration:none; border:1px solid var(--line2);
-  padding:3px 9px; border-radius:7px;}
-.pfnav a:hover{color:var(--ink); border-color:var(--ink);}
-.pfback{position:fixed; top:12px; left:12px; z-index:60; display:none; font-size:12px; color:var(--ink);
-  background:#fff; border:1px solid var(--line); border-radius:9px; padding:5px 11px; text-decoration:none;
-  box-shadow:0 2px 8px rgba(0,0,0,.08);}
-@media (max-width:760px){ #hud{display:none;} .pfback{display:inline-block;} }
 </style>
 </head>
 <body>
-  <a class="pfback" href="../index.html">‹ Portfolio</a>
-  <aside id="hud">
-    <div class="pfnav"><a href="../index.html">‹ Suhyeok Han</a><a href="index.html">Visual Design</a></div>
-    <h1>시침질 <span style="font-weight:400;color:#999">/ web maze</span></h1>
-    <p class="sub">Figma "Wire Frame" 프로토타입을 그대로 이식한 인터랙티브 미로.<br>화면을 탭하면 다음으로, 분기 버튼으로 갈래길을 택합니다.</p>
-    <div class="now">현재 화면</div>
-    <div class="nowname"><span id="nowname">—</span><span class="ori" id="oritag">portrait</span></div>
-    <div class="btnrow">
-      <button class="ctl" id="backBtn">← 뒤로</button>
-      <button class="ctl" id="homeBtn">처음으로</button>
-    </div>
-    <div id="trail"></div>
-    <div class="legend">
-      <b style="color:#1c1c1c">↻</b> 6번째 화면(바늘 선택)에서 기기가 가로로 90° 회전합니다.<br><br>
-      <b style="color:#e8a33d">●</b> 점멸 = 화면 아무 곳이나 탭<br>
-      <b style="color:#1c1c1c">⬭</b> 알약 버튼 = 미로 분기 선택
-    </div>
+  <div id="bar"><button class="cbtn" id="menuBtn" title="메뉴">☰</button>
+    <button class="cbtn" id="backBtn" title="뒤로">‹</button></div>
+
+  <aside id="panel">
+    <h1>시침질 <span style="font-weight:400;color:#777">web maze</span></h1>
+    <p class="sub">바느질로 풀어낸 생각의 미로. 화면을 탭하거나, 얽힌 글자를 따라가며 갈래를 골라 보세요.</p>
+    <div class="row"><button id="pHome">처음으로</button><button id="pBack">뒤로</button></div>
+    <label><input type="checkbox" id="hintChk"> 클릭 가능한 영역 표시</label>
+    <div class="hint">‹ 으로 한 단계 되돌아갑니다.<br>막다른 길은 없습니다 — 모든 길은 이어집니다.<br><br>‹ Suhyeok Han · Visual Design<br>portfolio.suhyeokhan.com</div>
+    <div class="row" style="margin-top:14px"><button id="pPortfolio">‹ 포트폴리오</button></div>
   </aside>
+  <div id="scrim"></div>
 
   <main id="stage">
     <div id="scaler">
       <div class="device" id="device">
         <div class="notch"></div>
-        <div class="viewport">
-          <div class="canvas" id="canvas"></div>
-        </div>
+        <div class="viewport" id="viewport"></div>
       </div>
     </div>
   </main>
 
 <script>
-/* =========================================================================
-   FRAME + CONNECTION DATA  (extracted from Figma via REST API)
-   Edit here to tweak the maze. Each frame:
-     name, disp(display label), orient(portrait|landscape), rotcue,
-     icon, texts:[{s,cx,cy,fs,al}], spots:[{to,label,trig,tt,dur,dir,cx,cy,w,h,full}]
-   ========================================================================= */
-const DATA = {"start": "108:159", "frames": {"1:2": {"name": "Home", "orient": "portrait", "rotcue": false, "texts": [{"s": "SUHYEOKHAN", "cx": 0.501, "cy": 0.97, "fs": 12, "al": "LEFT"}, {"s": "탭하여 케이스를 열자.", "cx": 0.5, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "22:147", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 2.08, "dir": null, "cx": 0.489, "cy": 0.5, "w": 0.575, "h": 0.559, "full": false, "label": "Needle Case Opened"}], "disp": "Home", "icon": "📦"}, "74:343": {"name": "Scissor Motion 4", "orient": "landscape", "rotcue": false, "texts": [], "spots": [{"to": "121:661", "trig": "AFTER_TIMEOUT", "tt": null, "dur": null, "dir": null, "cx": 0.391, "cy": 0.456, "w": 1.541, "h": 0.759, "full": true, "label": "Scissor Motion 5"}], "disp": "Scissor Motion 4", "icon": "✂︎"}, "121:731": {"name": "Scissor Motion 7", "orient": "landscape", "rotcue": false, "texts": [], "spots": [{"to": "121:748", "trig": "AFTER_TIMEOUT", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Scissor Motion 8"}, {"to": "121:684", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.96, "dir": null, "cx": 0.409, "cy": 0.466, "w": 2.07, "h": 0.955, "full": true, "label": "Scissor Motion 6"}], "disp": "Scissor Motion 7", "icon": "✂︎"}, "121:748": {"name": "Scissor Motion 8", "orient": "landscape", "rotcue": false, "texts": [{"s": "작업 얼마 못했는데.. 다시 해야지..", "cx": 0.733, "cy": 0.257, "fs": 36, "al": "CENTER"}], "spots": [{"to": "108:159", "trig": "ON_CLICK", "tt": null, "dur": null, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Main 1"}], "disp": "Scissor Motion 8", "icon": "✂︎"}, "121:661": {"name": "Scissor Motion 5", "orient": "landscape", "rotcue": false, "texts": [{"s": "꼬인 실을, 생각을 잘라버리자.", "cx": 0.872, "cy": 0.241, "fs": 15, "al": "LEFT"}, {"s": "tap!", "cx": 0.804, "cy": 0.556, "fs": 15, "al": "LEFT"}], "spots": [{"to": "121:684", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.96, "dir": null, "cx": 0.409, "cy": 0.466, "w": 2.07, "h": 0.955, "full": true, "label": "Scissor Motion 6"}], "disp": "Scissor Motion 5", "icon": "✂︎"}, "121:684": {"name": "Scissor Motion 6", "orient": "landscape", "rotcue": false, "texts": [], "spots": [{"to": "121:731", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.96, "dir": null, "cx": 0.409, "cy": 0.466, "w": 1.934, "h": 0.889, "full": true, "label": "Scissor Motion 7"}], "disp": "Scissor Motion 6", "icon": "✂︎"}, "121:780": {"name": "Scissor Motion 9", "orient": "landscape", "rotcue": false, "texts": [], "spots": [{"to": "121:819", "trig": "AFTER_TIMEOUT", "tt": null, "dur": null, "dir": null, "cx": 0.391, "cy": 0.456, "w": 1.541, "h": 0.759, "full": true, "label": "Scissor Motion 12"}], "disp": "Scissor Motion 9", "icon": "✂︎"}, "121:793": {"name": "Scissor Motion 10", "orient": "landscape", "rotcue": false, "texts": [], "spots": [{"to": "121:806", "trig": "AFTER_TIMEOUT", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Scissor Motion 11"}, {"to": "121:833", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.96, "dir": null, "cx": 0.409, "cy": 0.466, "w": 2.07, "h": 0.955, "full": true, "label": "Scissor Motion 13"}], "disp": "Scissor Motion 10", "icon": "✂︎"}, "121:806": {"name": "Scissor Motion 11", "orient": "landscape", "rotcue": false, "texts": [{"s": "너무 생각이 깊었다. 고민이 계속 이어진다고 해도 실천으로 이어지지 않으면 아무런 의미가 없다. 지금 해야하는 일은 괴로워하지 말고 꾸준한 실천이 이어지는 일이다. 작업이나 마저 하자.", "cx": 0.501, "cy": 0.736, "fs": 36, "al": "CENTER"}], "spots": [{"to": "123:182", "trig": "ON_CLICK", "tt": null, "dur": null, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Main 2"}], "disp": "Scissor Motion 11", "icon": "✂︎"}, "121:819": {"name": "Scissor Motion 12", "orient": "landscape", "rotcue": false, "texts": [{"s": "꼬인 실을, 생각을 잘라버리자.", "cx": 0.872, "cy": 0.241, "fs": 15, "al": "LEFT"}, {"s": "tap!", "cx": 0.804, "cy": 0.556, "fs": 15, "al": "LEFT"}], "spots": [{"to": "121:833", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.96, "dir": null, "cx": 0.409, "cy": 0.466, "w": 2.07, "h": 0.955, "full": true, "label": "Scissor Motion 13"}], "disp": "Scissor Motion 12", "icon": "✂︎"}, "121:833": {"name": "Scissor Motion 13", "orient": "landscape", "rotcue": false, "texts": [], "spots": [{"to": "121:793", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.96, "dir": null, "cx": 0.409, "cy": 0.466, "w": 1.934, "h": 0.889, "full": true, "label": "Scissor Motion 10"}], "disp": "Scissor Motion 13", "icon": "✂︎"}, "22:147": {"name": "Needle Case Opened", "orient": "portrait", "rotcue": false, "texts": [{"s": "바늘을 선택하자.", "cx": 0.5, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "109:229", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.96, "dir": null, "cx": 0.489, "cy": 0.527, "w": 0.025, "h": 0.373, "full": false, "label": "Needle Chosen 1"}], "disp": "Needle Case Opened", "icon": "🪡"}, "109:229": {"name": "Needle Chosen", "orient": "portrait", "rotcue": false, "texts": [], "spots": [{"to": "109:248", "trig": "AFTER_TIMEOUT", "tt": "SMART_ANIMATE", "dur": 1.25, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Needle Chosen 2"}], "disp": "Needle Chosen 1", "icon": "🪡"}, "109:248": {"name": "Needle Chosen", "orient": "portrait", "rotcue": false, "texts": [], "spots": [{"to": "109:266", "trig": "AFTER_TIMEOUT", "tt": "SMART_ANIMATE", "dur": 1.67, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Needle Chosen 3"}], "disp": "Needle Chosen 2", "icon": "🪡"}, "109:266": {"name": "Needle Chosen", "orient": "portrait", "rotcue": true, "texts": [{"s": "tap!", "cx": 0.501, "cy": 0.374, "fs": 15, "al": "LEFT"}], "spots": [{"to": "26:296", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 1.25, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Put Thread into the needle hole 1"}], "disp": "Needle Chosen 3", "icon": "🪡"}, "26:296": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.499, "cy": 0.376, "fs": 15, "al": "LEFT"}], "spots": [{"to": "26:372", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 1.02, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Put Thread into the needle hole 2"}], "disp": "Put Thread into the needle hole 1", "icon": "🧵"}, "26:372": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.761, "cy": 0.15, "fs": 15, "al": "LEFT"}, {"s": "바늘구멍에 실을 끼우자.", "cx": 0.846, "cy": 0.224, "fs": 15, "al": "LEFT"}], "spots": [{"to": "28:391", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 1.02, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Put Thread into the needle hole 3"}], "disp": "Put Thread into the needle hole 2", "icon": "🧵"}, "28:391": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.761, "cy": 0.15, "fs": 15, "al": "LEFT"}, {"s": "다시", "cx": 0.846, "cy": 0.224, "fs": 15, "al": "LEFT"}], "spots": [{"to": "28:398", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 1.02, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Put Thread into the needle hole 4"}], "disp": "Put Thread into the needle hole 3", "icon": "🧵"}, "28:398": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.761, "cy": 0.15, "fs": 15, "al": "LEFT"}, {"s": "다시", "cx": 0.846, "cy": 0.224, "fs": 15, "al": "LEFT"}], "spots": [{"to": "28:405", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 1.02, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Put Thread into the needle hole 5"}], "disp": "Put Thread into the needle hole 4", "icon": "🧵"}, "28:405": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.761, "cy": 0.15, "fs": 15, "al": "LEFT"}, {"s": "다시", "cx": 0.846, "cy": 0.224, "fs": 15, "al": "LEFT"}], "spots": [{"to": "28:412", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 1.02, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Put Thread into the needle hole 6"}], "disp": "Put Thread into the needle hole 5", "icon": "🧵"}, "28:412": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.761, "cy": 0.15, "fs": 15, "al": "LEFT"}, {"s": "다시", "cx": 0.846, "cy": 0.224, "fs": 15, "al": "LEFT"}], "spots": [{"to": "28:419", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 1.02, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Put Thread into the needle hole 7"}], "disp": "Put Thread into the needle hole 6", "icon": "🧵"}, "28:419": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.761, "cy": 0.15, "fs": 15, "al": "LEFT"}, {"s": "성공!", "cx": 0.846, "cy": 0.224, "fs": 15, "al": "LEFT"}], "spots": [{"to": "44:272", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 1"}], "disp": "Put Thread into the needle hole 7", "icon": "🧵"}, "44:272": {"name": "바느질 1", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.712, "cy": 0.185, "fs": 15, "al": "LEFT"}, {"s": "이제 바느질을 하자.", "cx": 0.76, "cy": 0.259, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:134", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 2"}], "disp": "바느질 1", "icon": "🪡"}, "111:134": {"name": "바느질 2", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:298", "trig": "ON_CLICK", "tt": null, "dur": null, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 3"}], "disp": "바느질 2", "icon": "🪡"}, "111:141": {"name": "바느질 4", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:159", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 5"}], "disp": "바느질 4", "icon": "🪡"}, "303:298": {"name": "바느질 3", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:141", "trig": "AFTER_TIMEOUT", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 4"}], "disp": "바느질 3", "icon": "🪡"}, "111:159": {"name": "바느질 5", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:170", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 6"}], "disp": "바느질 5", "icon": "🪡"}, "111:195": {"name": "바느질 8", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:208", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 9"}], "disp": "바느질 8", "icon": "🪡"}, "111:170": {"name": "바느질 6", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:181", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 7"}], "disp": "바느질 6", "icon": "🪡"}, "111:208": {"name": "바느질 9", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:238", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 10"}], "disp": "바느질 9", "icon": "🪡"}, "108:159": {"name": "Main", "orient": "portrait", "rotcue": false, "texts": [{"s": "SUHYEOKHAN", "cx": 0.501, "cy": 0.97, "fs": 12, "al": "LEFT"}, {"s": "tap!", "cx": 0.504, "cy": 0.576, "fs": 15, "al": "LEFT"}], "spots": [{"to": "1:2", "trig": "ON_CLICK", "tt": null, "dur": null, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Home"}], "disp": "Main 1", "icon": "📦"}, "111:181": {"name": "바느질 7", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:195", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 8"}], "disp": "바느질 7", "icon": "🪡"}, "303:468": {"name": "바느질 19", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "시간이 걸리더라도 성실히", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:476", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 20"}], "disp": "바느질 19", "icon": "🧵"}, "303:476": {"name": "바느질 20", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "시간이 걸리더라도 성실히", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:440", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 18"}], "disp": "바느질 20", "icon": "🧵"}, "303:485": {"name": "바느질 21", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "시간이 걸리더라도 성실히", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:468", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 19"}], "disp": "바느질 21", "icon": "🧵"}, "303:423": {"name": "바느질 16", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:431", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 17"}], "disp": "바느질 16", "icon": "🪡"}, "303:431": {"name": "바느질 17", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:554", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 27"}], "disp": "바느질 17", "icon": "🪡"}, "303:440": {"name": "바느질 18", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:423", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 16"}], "disp": "바느질 18", "icon": "🪡"}, "111:223": {"name": "바느질 11", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:230", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 12"}], "disp": "바느질 11", "icon": "🪡"}, "111:230": {"name": "바느질 12", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:395", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 15"}], "disp": "바느질 12", "icon": "🪡"}, "111:274": {"name": "실 꼬임", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.336, "cy": 0.482, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:288", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Put Thread into the needle hole 8"}], "disp": "실 꼬임", "icon": "🧵"}, "111:288": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "하얀 실을 탭하며 실을 풀어나가 보자.", "cx": 0.836, "cy": 0.536, "fs": 24, "al": "LEFT"}, {"s": "스크롤을 움직여보자.", "cx": 0.804, "cy": 0.047, "fs": 15, "al": "LEFT"}, {"s": "스크롤을 움직여보자.", "cx": 0.803, "cy": 0.033, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:318", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.74, "cy": 0.818, "w": 1.298, "h": 0.226, "full": false, "label": "Put Thread into the needle hole 9"}], "disp": "Put Thread into the needle hole 8", "icon": "🧵"}, "111:318": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.944, "cy": 0.202, "fs": 36, "al": "LEFT"}], "spots": [{"to": "115:358", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.578, "cy": 0.468, "w": 1.156, "h": 0.59, "full": false, "label": "Put Thread into the needle hole 10"}, {"to": "115:424", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.432, "cy": 0.949, "w": 0.442, "h": 0.136, "full": false, "label": "Put Thread into the needle hole 11"}, {"to": "74:343", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 0.3, "dir": null, "cx": 0.921, "cy": 0.188, "w": 0.158, "h": 0.061, "full": false, "label": "Scissor Motion 4"}], "disp": "Put Thread into the needle hole 9", "icon": "✂︎"}, "115:358": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.944, "cy": 0.063, "fs": 36, "al": "LEFT"}], "spots": [{"to": "115:453", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.594, "cy": 0.94, "w": 0.344, "h": 0.202, "full": false, "label": "Put Thread into the needle hole 15"}, {"to": "121:486", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.132, "cy": 0.789, "w": 0.358, "h": 0.1, "full": false, "label": "Put Thread into the needle hole 12"}, {"to": "74:343", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 0.3, "dir": null, "cx": 0.921, "cy": 0.047, "w": 0.158, "h": 0.072, "full": false, "label": "Scissor Motion 4"}], "disp": "Put Thread into the needle hole 10", "icon": "✂︎"}, "115:424": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.921, "cy": 0.087, "fs": 36, "al": "LEFT"}], "spots": [{"to": "115:453", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.913, "cy": 0.826, "w": 0.674, "h": 0.182, "full": false, "label": "Put Thread into the needle hole 15"}, {"to": "74:343", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 0.3, "dir": null, "cx": 0.898, "cy": 0.071, "w": 0.158, "h": 0.071, "full": false, "label": "Scissor Motion 4"}], "disp": "Put Thread into the needle hole 11", "icon": "✂︎"}, "303:2566": {"name": "바느질 55", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2574", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 56"}], "disp": "바느질 55", "icon": "🪡"}, "303:2574": {"name": "바느질 56", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2635", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 63"}], "disp": "바느질 56", "icon": "🪡"}, "303:2583": {"name": "바느질 57", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2566", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 55"}], "disp": "바느질 57", "icon": "🪡"}, "303:2591": {"name": "바느질 58", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2599", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 59"}], "disp": "바느질 58", "icon": "🪡"}, "303:2599": {"name": "바느질 59", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:274", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "실 꼬임"}], "disp": "바느질 59", "icon": "🪡"}, "303:2608": {"name": "바느질 60", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2591", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 58"}], "disp": "바느질 60", "icon": "🪡"}, "303:2616": {"name": "바느질 61", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2625", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 62"}], "disp": "바느질 61", "icon": "🪡"}, "303:2625": {"name": "바느질 62", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2608", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 60"}], "disp": "바느질 62", "icon": "🪡"}, "303:2635": {"name": "바느질 63", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2616", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 61"}], "disp": "바느질 63", "icon": "🪡"}, "121:486": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.944, "cy": 0.195, "fs": 36, "al": "LEFT"}], "spots": [{"to": "115:358", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "RIGHT", "cx": 0.375, "cy": 0.607, "w": 0.751, "h": 0.651, "full": true, "label": "Put Thread into the needle hole 10"}, {"to": "121:494", "trig": "ON_CLICK", "tt": "SLIDE_OUT", "dur": 0.3, "dir": "LEFT", "cx": 0.578, "cy": 0.468, "w": 1.156, "h": 0.59, "full": false, "label": "Put Thread into the needle hole 13"}, {"to": "121:503", "trig": "ON_CLICK", "tt": "SLIDE_OUT", "dur": 0.3, "dir": "TOP", "cx": 0.432, "cy": 0.949, "w": 0.442, "h": 0.136, "full": false, "label": "Put Thread into the needle hole 14"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.921, "cy": 0.188, "w": 0.158, "h": 0.061, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 12", "icon": "✂︎"}, "121:494": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.944, "cy": 0.195, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:516", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "TOP", "cx": 0.594, "cy": 0.95, "w": 0.344, "h": 0.171, "full": false, "label": "Put Thread into the needle hole 16"}, {"to": "121:486", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "RIGHT", "cx": 0.132, "cy": 0.822, "w": 0.358, "h": 0.084, "full": false, "label": "Put Thread into the needle hole 12"}, {"to": "121:528", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.589, "cy": 0.503, "w": 1.044, "h": 0.304, "full": false, "label": "Put Thread into the needle hole 17"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.921, "cy": 0.188, "w": 0.158, "h": 0.061, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 13", "icon": "✂︎"}, "121:503": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.857, "cy": 0.105, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:516", "trig": "ON_CLICK", "tt": "SLIDE_OUT", "dur": 0.3, "dir": "LEFT", "cx": 0.913, "cy": 0.826, "w": 0.674, "h": 0.182, "full": false, "label": "Put Thread into the needle hole 16"}, {"to": "121:486", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "BOTTOM", "cx": 0.261, "cy": 0.132, "w": 0.587, "h": 0.264, "full": false, "label": "Put Thread into the needle hole 12"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.834, "cy": 0.096, "w": 0.158, "h": 0.071, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 14", "icon": "✂︎"}, "115:453": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.583, "cy": 0.229, "fs": 36, "al": "LEFT"}], "spots": [{"to": "115:424", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "RIGHT", "cx": 0.133, "cy": 0.471, "w": 0.34, "h": 0.182, "full": false, "label": "Put Thread into the needle hole 11"}, {"to": "115:358", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "BOTTOM", "cx": 0.36, "cy": 0.126, "w": 0.481, "h": 0.296, "full": false, "label": "Put Thread into the needle hole 10"}, {"to": "74:343", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 0.3, "dir": null, "cx": 0.56, "cy": 0.213, "w": 0.158, "h": 0.071, "full": false, "label": "Scissor Motion 4"}], "disp": "Put Thread into the needle hole 15", "icon": "✂︎"}, "121:516": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.702, "cy": 0.176, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:503", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "RIGHT", "cx": 0.133, "cy": 0.471, "w": 0.34, "h": 0.182, "full": false, "label": "Put Thread into the needle hole 14"}, {"to": "121:494", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "BOTTOM", "cx": 0.36, "cy": 0.126, "w": 0.481, "h": 0.296, "full": false, "label": "Put Thread into the needle hole 13"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.679, "cy": 0.168, "w": 0.158, "h": 0.071, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 16", "icon": "✂︎"}, "121:528": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.822, "cy": 0.177, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:494", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "RIGHT", "cx": 0.416, "cy": 0.573, "w": 0.751, "h": 0.651, "full": true, "label": "Put Thread into the needle hole 13"}, {"to": "121:536", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.578, "cy": 0.468, "w": 1.156, "h": 0.59, "full": false, "label": "Put Thread into the needle hole 18"}, {"to": "121:545", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "TOP", "cx": 0.432, "cy": 0.949, "w": 0.442, "h": 0.136, "full": false, "label": "Put Thread into the needle hole 19"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.799, "cy": 0.169, "w": 0.158, "h": 0.061, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 17", "icon": "✂︎"}, "121:536": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.905, "cy": 0.2, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:557", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "TOP", "cx": 0.594, "cy": 0.95, "w": 0.344, "h": 0.171, "full": false, "label": "Put Thread into the needle hole 20"}, {"to": "121:528", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "RIGHT", "cx": 0.132, "cy": 0.822, "w": 0.358, "h": 0.084, "full": false, "label": "Put Thread into the needle hole 17"}, {"to": "121:569", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.589, "cy": 0.503, "w": 1.044, "h": 0.304, "full": false, "label": "Put Thread into the needle hole 21"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.882, "cy": 0.192, "w": 0.158, "h": 0.061, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 18", "icon": "✂︎"}, "121:545": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.338, "cy": 0.261, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:557", "trig": "ON_CLICK", "tt": "SLIDE_OUT", "dur": 0.3, "dir": "LEFT", "cx": 0.913, "cy": 0.826, "w": 0.674, "h": 0.182, "full": false, "label": "Put Thread into the needle hole 20"}, {"to": "121:528", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "BOTTOM", "cx": 0.261, "cy": 0.132, "w": 0.587, "h": 0.264, "full": false, "label": "Put Thread into the needle hole 17"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.315, "cy": 0.253, "w": 0.158, "h": 0.071, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 19", "icon": "✂︎"}, "121:557": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.198, "cy": 0.345, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:545", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "RIGHT", "cx": 0.133, "cy": 0.471, "w": 0.34, "h": 0.182, "full": false, "label": "Put Thread into the needle hole 19"}, {"to": "121:536", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "BOTTOM", "cx": 0.36, "cy": 0.126, "w": 0.481, "h": 0.296, "full": false, "label": "Put Thread into the needle hole 18"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.175, "cy": 0.337, "w": 0.158, "h": 0.071, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 20", "icon": "✂︎"}, "121:569": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.933, "cy": 0.2, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:536", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.416, "cy": 0.535, "w": 0.751, "h": 0.651, "full": true, "label": "Put Thread into the needle hole 18"}, {"to": "121:577", "trig": "ON_CLICK", "tt": "SLIDE_OUT", "dur": 0.3, "dir": "LEFT", "cx": 0.578, "cy": 0.468, "w": 1.156, "h": 0.59, "full": false, "label": "Put Thread into the needle hole 22"}, {"to": "121:586", "trig": "ON_CLICK", "tt": "SLIDE_OUT", "dur": 0.3, "dir": "TOP", "cx": 0.432, "cy": 0.949, "w": 0.442, "h": 0.136, "full": false, "label": "Put Thread into the needle hole 23"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.91, "cy": 0.193, "w": 0.158, "h": 0.061, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 21", "icon": "✂︎"}, "121:577": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.666, "cy": 0.064, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:598", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "TOP", "cx": 0.594, "cy": 0.94, "w": 0.344, "h": 0.202, "full": false, "label": "Put Thread into the needle hole 24"}, {"to": "121:569", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "RIGHT", "cx": 0.132, "cy": 0.789, "w": 0.358, "h": 0.1, "full": false, "label": "Put Thread into the needle hole 21"}, {"to": "121:906", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.589, "cy": 0.41, "w": 1.044, "h": 0.36, "full": false, "label": "Scissor Motion 14"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.643, "cy": 0.055, "w": 0.158, "h": 0.072, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 22", "icon": "✂︎"}, "121:586": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.859, "cy": 0.217, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:598", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "LEFT", "cx": 0.913, "cy": 0.826, "w": 0.674, "h": 0.182, "full": false, "label": "Put Thread into the needle hole 24"}, {"to": "121:569", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "BOTTOM", "cx": 0.261, "cy": 0.132, "w": 0.587, "h": 0.264, "full": false, "label": "Put Thread into the needle hole 21"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.836, "cy": 0.209, "w": 0.158, "h": 0.071, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 23", "icon": "✂︎"}, "121:598": {"name": "Put Thread into the needle hole", "orient": "landscape", "rotcue": false, "texts": [{"s": "자를까?", "cx": 0.683, "cy": 0.154, "fs": 36, "al": "LEFT"}], "spots": [{"to": "121:586", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "RIGHT", "cx": 0.133, "cy": 0.471, "w": 0.34, "h": 0.182, "full": false, "label": "Put Thread into the needle hole 23"}, {"to": "121:577", "trig": "ON_CLICK", "tt": "PUSH", "dur": 0.3, "dir": "BOTTOM", "cx": 0.36, "cy": 0.126, "w": 0.481, "h": 0.296, "full": false, "label": "Put Thread into the needle hole 22"}, {"to": "121:780", "trig": "ON_CLICK", "tt": "DISSOLVE", "dur": 1.25, "dir": null, "cx": 0.66, "cy": 0.146, "w": 0.158, "h": 0.071, "full": false, "label": "Scissor Motion 9"}], "disp": "Put Thread into the needle hole 24", "icon": "✂︎"}, "111:238": {"name": "바느질 10", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "111:223", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 11"}], "disp": "바느질 10", "icon": "🪡"}, "303:376": {"name": "바느질 13", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "시간이 걸리더라도 성실히", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:385", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 14"}], "disp": "바느질 13", "icon": "🧵"}, "303:385": {"name": "바느질 14", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "시간이 걸리더라도 성실히", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:485", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 21"}], "disp": "바느질 14", "icon": "🧵"}, "303:395": {"name": "바느질 15", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "시간이 걸리더라도 성실히", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:376", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 13"}], "disp": "바느질 15", "icon": "🧵"}, "303:510": {"name": "바느질 22", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:518", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 23"}], "disp": "바느질 22", "icon": "🪡"}, "303:518": {"name": "바느질 23", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:891", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 30"}], "disp": "바느질 23", "icon": "🪡"}, "303:527": {"name": "바느질 24", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:510", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 22"}], "disp": "바느질 24", "icon": "🪡"}, "303:535": {"name": "바느질 25", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:544", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 26"}], "disp": "바느질 25", "icon": "🪡"}, "303:544": {"name": "바느질 26", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:527", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 24"}], "disp": "바느질 26", "icon": "🪡"}, "303:554": {"name": "바느질 27", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:535", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 25"}], "disp": "바느질 27", "icon": "🪡"}, "303:2245": {"name": "바느질 37", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2253", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 38"}], "disp": "바느질 37", "icon": "🪡"}, "303:2253": {"name": "바느질 38", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2314", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 45"}], "disp": "바느질 38", "icon": "🪡"}, "303:2262": {"name": "바느질 39", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2245", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 37"}], "disp": "바느질 39", "icon": "🪡"}, "303:2270": {"name": "바느질 40", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2278", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 41"}], "disp": "바느질 40", "icon": "🪡"}, "303:2278": {"name": "바느질 41", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2454", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 48"}], "disp": "바느질 41", "icon": "🪡"}, "303:2287": {"name": "바느질 42", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2270", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 40"}], "disp": "바느질 42", "icon": "🪡"}, "303:2295": {"name": "바느질 43", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2304", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 44"}], "disp": "바느질 43", "icon": "🪡"}, "303:2304": {"name": "바느질 44", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2287", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 42"}], "disp": "바느질 44", "icon": "🪡"}, "303:2314": {"name": "바느질 45", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2295", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 43"}], "disp": "바느질 45", "icon": "🪡"}, "303:2437": {"name": "바느질 46", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "욕심내고 서두르면 꼬이니까 조심조심", "cx": 0.805, "cy": 0.226, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2445", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 47"}], "disp": "바느질 46", "icon": "🪡"}, "303:2445": {"name": "바느질 47", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "욕심내고 서두르면 꼬이니까 조심조심", "cx": 0.805, "cy": 0.226, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2506", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 54"}], "disp": "바느질 47", "icon": "🪡"}, "303:2454": {"name": "바느질 48", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "욕심내고 서두르면 꼬이니까 조심조심", "cx": 0.805, "cy": 0.226, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2437", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 46"}], "disp": "바느질 48", "icon": "🪡"}, "303:2462": {"name": "바느질 49", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "욕심내고 서두르면 꼬이니까 조심조심", "cx": 0.805, "cy": 0.226, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2470", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 50"}], "disp": "바느질 49", "icon": "🪡"}, "303:2470": {"name": "바느질 50", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "욕심내고 서두르면 꼬이니까 조심조심", "cx": 0.805, "cy": 0.226, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2583", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 57"}], "disp": "바느질 50", "icon": "🪡"}, "303:2479": {"name": "바느질 51", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "욕심내고 서두르면 꼬이니까 조심조심", "cx": 0.805, "cy": 0.226, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2462", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 49"}], "disp": "바느질 51", "icon": "🪡"}, "303:2487": {"name": "바느질 52", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "욕심내고 서두르면 꼬이니까 조심조심", "cx": 0.805, "cy": 0.226, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2496", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 53"}], "disp": "바느질 52", "icon": "🪡"}, "303:2496": {"name": "바느질 53", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "욕심내고 서두르면 꼬이니까 조심조심", "cx": 0.805, "cy": 0.226, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2479", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 51"}], "disp": "바느질 53", "icon": "🪡"}, "303:2506": {"name": "바느질 54", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "욕심내고 서두르면 꼬이니까 조심조심", "cx": 0.805, "cy": 0.226, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2487", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 52"}], "disp": "바느질 54", "icon": "🪡"}, "303:874": {"name": "바느질 28", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "피곤할지라도 꼼꼼하게", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:882", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 29"}], "disp": "바느질 28", "icon": "🪡"}, "303:882": {"name": "바느질 29", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "피곤할지라도 꼼꼼하게", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:943", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 36"}], "disp": "바느질 29", "icon": "🪡"}, "303:891": {"name": "바느질 30", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "피곤할지라도 꼼꼼하게", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:874", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 28"}], "disp": "바느질 30", "icon": "🪡"}, "303:899": {"name": "바느질 31", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "피곤할지라도 꼼꼼하게", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:907", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 32"}], "disp": "바느질 31", "icon": "🪡"}, "303:907": {"name": "바느질 32", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "피곤할지라도 꼼꼼하게", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:2262", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 39"}], "disp": "바느질 32", "icon": "🪡"}, "303:916": {"name": "바느질 33", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "피곤할지라도 꼼꼼하게", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:899", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 31"}], "disp": "바느질 33", "icon": "🪡"}, "303:924": {"name": "바느질 34", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "피곤할지라도 꼼꼼하게", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:933", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 35"}], "disp": "바느질 34", "icon": "🪡"}, "303:933": {"name": "바느질 35", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "피곤할지라도 꼼꼼하게", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:916", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 33"}], "disp": "바느질 35", "icon": "🪡"}, "303:943": {"name": "바느질 36", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.758, "cy": 0.1, "fs": 15, "al": "LEFT"}, {"s": "피곤할지라도 꼼꼼하게", "cx": 0.805, "cy": 0.179, "fs": 15, "al": "LEFT"}], "spots": [{"to": "303:924", "trig": "ON_CLICK", "tt": "SMART_ANIMATE", "dur": 0.3, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "바느질 34"}], "disp": "바느질 36", "icon": "🪡"}, "121:906": {"name": "Scissor Motion 14", "orient": "landscape", "rotcue": false, "texts": [{"s": "tap!", "cx": 0.771, "cy": 0.97, "fs": 15, "al": "LEFT"}], "spots": [{"to": "123:182", "trig": "ON_CLICK", "tt": null, "dur": null, "dir": null, "cx": 0.394, "cy": 0.647, "w": 0.982, "h": 1.199, "full": true, "label": "Main 2"}], "disp": "Scissor Motion 14", "icon": "✂︎"}, "123:182": {"name": "Main", "orient": "landscape", "rotcue": false, "texts": [{"s": "시침질\n\n한수혁\n@suhxuk\n서울대학교 의류학과 / 시각디자인과", "cx": 0.528, "cy": 0.571, "fs": 36, "al": "LEFT"}, {"s": "tap! 하여 다시 작업하기", "cx": 0.085, "cy": 0.514, "fs": 15, "al": "LEFT"}], "spots": [{"to": "108:159", "trig": "ON_CLICK", "tt": null, "dur": null, "dir": null, "cx": 0.5, "cy": 0.5, "w": 1.0, "h": 1.0, "full": true, "label": "Main 1"}], "disp": "Main 2", "icon": "📦"}}};
-const FRAMES = DATA.frames;
-const START  = DATA.start;
+const DATA = {"start":"108:159","frames":{"1:2":{"name":"Home","orient":"portrait","w":393,"h":852,"rotcue":false,"spots":[{"x":0.201,"y":0.2207,"w":0.5751,"h":0.5587,"to":"22:147","tt":"SMART_ANIMATE","dur":2.08,"dir":null,"full":false}],"img":"1-2.png"},"74:343":{"name":"Scissor Motion 4","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0.0763,"w":1,"h":0.7587,"to":"121:661","tt":null,"dur":null,"dir":null,"full":true}],"img":"74-343.png"},"121:731":{"name":"Scissor Motion 7","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"121:748","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true},{"x":0,"y":0,"w":1,"h":0.9547,"to":"121:684","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true},{"x":0,"y":0.0899,"w":1,"h":0.6981,"to":"121:684","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true}],"img":"121-731.png"},"121:748":{"name":"Scissor Motion 8","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"108:159","tt":null,"dur":null,"dir":null,"full":true}],"img":"121-748.png"},"121:661":{"name":"Scissor Motion 5","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":0.9547,"to":"121:684","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true},{"x":0,"y":0.0899,"w":1,"h":0.6981,"to":"121:684","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true}],"img":"121-661.png"},"121:684":{"name":"Scissor Motion 6","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0.0211,"w":1,"h":0.889,"to":"121:731","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true},{"x":0,"y":0.1498,"w":1,"h":0.6063,"to":"121:731","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true}],"img":"121-684.png"},"121:780":{"name":"Scissor Motion 9","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0.0763,"w":1,"h":0.7587,"to":"121:819","tt":null,"dur":null,"dir":null,"full":true}],"img":"121-780.png"},"121:793":{"name":"Scissor Motion 10","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"121:806","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true},{"x":0,"y":0,"w":1,"h":0.9547,"to":"121:833","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true},{"x":0,"y":0.0899,"w":1,"h":0.6981,"to":"121:833","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"121-793.png"},"121:806":{"name":"Scissor Motion 11","orient":"landscape","w":393,"h":1307,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"123:182","tt":null,"dur":null,"dir":null,"full":true}],"img":"121-806.png"},"121:819":{"name":"Scissor Motion 12","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":0.9547,"to":"121:833","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true},{"x":0,"y":0.0899,"w":1,"h":0.6981,"to":"121:833","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"121-819.png"},"121:833":{"name":"Scissor Motion 13","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0.0211,"w":1,"h":0.889,"to":"121:793","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true},{"x":0,"y":0.1498,"w":1,"h":0.6063,"to":"121:793","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":true}],"img":"121-833.png"},"22:147":{"name":"Needle Case Opened","orient":"portrait","w":393,"h":852,"rotcue":false,"spots":[{"x":0.4758,"y":0.3404,"w":0.0254,"h":0.3732,"to":"109:229","tt":"SMART_ANIMATE","dur":0.96,"dir":null,"full":false}],"img":"22-147.png"},"109:229":{"name":"Needle Chosen","orient":"portrait","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"109:248","tt":"SMART_ANIMATE","dur":1.25,"dir":null,"full":true}],"img":"109-229.png"},"109:248":{"name":"Needle Chosen","orient":"portrait","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"109:266","tt":"SMART_ANIMATE","dur":1.67,"dir":null,"full":true}],"img":"109-248.png"},"109:266":{"name":"Needle Chosen","orient":"portrait","w":393,"h":852,"rotcue":true,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"26:296","tt":"SMART_ANIMATE","dur":1.25,"dir":null,"full":true}],"img":"109-266.png"},"26:296":{"name":"Put Thread into the needle hole","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"26:372","tt":"SMART_ANIMATE","dur":1.02,"dir":null,"full":true}],"img":"26-296.png"},"26:372":{"name":"Put Thread into the needle hole","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"28:391","tt":"SMART_ANIMATE","dur":1.02,"dir":null,"full":true}],"img":"26-372.png"},"28:391":{"name":"Put Thread into the needle hole","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"28:398","tt":"SMART_ANIMATE","dur":1.02,"dir":null,"full":true}],"img":"28-391.png"},"28:398":{"name":"Put Thread into the needle hole","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"28:405","tt":"SMART_ANIMATE","dur":1.02,"dir":null,"full":true}],"img":"28-398.png"},"28:405":{"name":"Put Thread into the needle hole","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"28:412","tt":"SMART_ANIMATE","dur":1.02,"dir":null,"full":true}],"img":"28-405.png"},"28:412":{"name":"Put Thread into the needle hole","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"28:419","tt":"SMART_ANIMATE","dur":1.02,"dir":null,"full":true}],"img":"28-412.png"},"28:419":{"name":"Put Thread into the needle hole","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"44:272","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"28-419.png"},"44:272":{"name":"바느질 1","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:134","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"44-272.png"},"111:134":{"name":"바느질 2","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:298","tt":null,"dur":null,"dir":null,"full":true}],"img":"111-134.png"},"111:141":{"name":"바느질 4","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:159","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-141.png"},"303:298":{"name":"바느질 3","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:141","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-298.png"},"111:159":{"name":"바느질 5","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:170","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-159.png"},"111:195":{"name":"바느질 8","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:208","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-195.png"},"111:170":{"name":"바느질 6","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:181","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-170.png"},"111:208":{"name":"바느질 9","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:238","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-208.png"},"108:159":{"name":"Main","orient":"portrait","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"1:2","tt":null,"dur":null,"dir":null,"full":true}],"img":"108-159.png"},"111:181":{"name":"바느질 7","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:195","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-181.png"},"303:468":{"name":"바느질 19","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:476","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-468.png"},"303:476":{"name":"바느질 20","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:440","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-476.png"},"303:485":{"name":"바느질 21","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:468","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-485.png"},"303:423":{"name":"바느질 16","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:431","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-423.png"},"303:431":{"name":"바느질 17","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:554","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-431.png"},"303:440":{"name":"바느질 18","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:423","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-440.png"},"111:223":{"name":"바느질 11","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:230","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-223.png"},"111:230":{"name":"바느질 12","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:395","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-230.png"},"111:274":{"name":"실 꼬임","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:288","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-274.png"},"111:288":{"name":"Put Thread into the needle hole","orient":"landscape","w":393,"h":2999,"rotcue":false,"spots":[{"x":0.0916,"y":0.7052,"w":1,"h":0.2261,"to":"111:318","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false}],"img":"111-288.png"},"111:318":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":3303,"rotcue":false,"spots":[{"x":0,"y":0.1735,"w":1,"h":0.5896,"to":"115:358","tt":"PUSH","dur":0.3,"dir":"LEFT","full":true},{"x":0.2113,"y":0.881,"w":0.4417,"h":0.1359,"to":"115:424","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.8421,"y":0.1574,"w":0.1579,"h":0.0609,"to":"74:343","tt":"DISSOLVE","dur":0.3,"dir":null,"full":false}],"img":"111-318.png"},"115:358":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2783,"rotcue":false,"spots":[{"x":0.4215,"y":0.839,"w":0.3444,"h":0.2024,"to":"115:453","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0,"y":0.7395,"w":0.358,"h":0.0997,"to":"121:486","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.0669,"y":0.23,"w":1,"h":0.3604,"to":"121:486","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.8421,"y":0.0104,"w":0.1579,"h":0.0722,"to":"74:343","tt":"DISSOLVE","dur":0.3,"dir":null,"full":false}],"img":"115-358.png"},"115:424":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2831,"rotcue":false,"spots":[{"x":0.5764,"y":0.7351,"w":0.6742,"h":0.182,"to":"115:453","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.3923,"y":0.4825,"w":0.5858,"h":0.1095,"to":"115:453","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.819,"y":0.0357,"w":0.1579,"h":0.071,"to":"74:343","tt":"DISSOLVE","dur":0.3,"dir":null,"full":false}],"img":"115-424.png"},"303:2566":{"name":"바느질 55","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2574","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2566.png"},"303:2574":{"name":"바느질 56","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2635","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2574.png"},"303:2583":{"name":"바느질 57","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2566","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2583.png"},"303:2591":{"name":"바느질 58","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2599","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2591.png"},"303:2599":{"name":"바느질 59","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:274","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2599.png"},"303:2608":{"name":"바느질 60","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2591","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2608.png"},"303:2616":{"name":"바느질 61","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2625","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2616.png"},"303:2625":{"name":"바느질 62","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2608","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2625.png"},"303:2635":{"name":"바느질 63","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2616","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2635.png"},"121:486":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":3303,"rotcue":false,"spots":[{"x":0,"y":0.2816,"w":0.7505,"h":0.651,"to":"115:358","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0,"y":0.1735,"w":1,"h":0.5896,"to":"121:494","tt":"SLIDE_OUT","dur":0.3,"dir":"LEFT","full":true},{"x":0.2113,"y":0.881,"w":0.4417,"h":0.1359,"to":"121:503","tt":"SLIDE_OUT","dur":0.3,"dir":"TOP","full":false},{"x":0.8421,"y":0.1574,"w":0.1579,"h":0.0609,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-486.png"},"121:494":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":3303,"rotcue":false,"spots":[{"x":0.4215,"y":0.8644,"w":0.3444,"h":0.1705,"to":"121:516","tt":"PUSH","dur":0.3,"dir":"TOP","full":false},{"x":0,"y":0.7805,"w":0.358,"h":0.084,"to":"121:486","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0.0669,"y":0.3512,"w":1,"h":0.3037,"to":"121:528","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.8421,"y":0.1574,"w":0.1579,"h":0.0609,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-494.png"},"121:503":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2831,"rotcue":false,"spots":[{"x":0.5764,"y":0.7351,"w":0.6742,"h":0.182,"to":"121:516","tt":"SLIDE_OUT","dur":0.3,"dir":"LEFT","full":false},{"x":0,"y":0,"w":0.5866,"h":0.2637,"to":"121:486","tt":"PUSH","dur":0.3,"dir":"BOTTOM","full":false},{"x":0.3923,"y":0.4825,"w":0.5858,"h":0.1095,"to":"121:516","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.7552,"y":0.0608,"w":0.1579,"h":0.071,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-503.png"},"115:453":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2831,"rotcue":false,"spots":[{"x":0,"y":0.3797,"w":0.3399,"h":0.182,"to":"115:424","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0,"y":0.5238,"w":0.6886,"h":0.1106,"to":"115:424","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0.1192,"y":0,"w":0.4808,"h":0.2962,"to":"115:358","tt":"PUSH","dur":0.3,"dir":"BOTTOM","full":false},{"x":0.4812,"y":0.1777,"w":0.1579,"h":0.071,"to":"74:343","tt":"DISSOLVE","dur":0.3,"dir":null,"full":false}],"img":"115-453.png"},"121:516":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2831,"rotcue":false,"spots":[{"x":0,"y":0.3797,"w":0.3399,"h":0.182,"to":"121:503","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0,"y":0.5238,"w":0.6886,"h":0.1106,"to":"121:503","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0.1192,"y":0,"w":0.4808,"h":0.2962,"to":"121:494","tt":"PUSH","dur":0.3,"dir":"BOTTOM","full":false},{"x":0.6004,"y":0.1321,"w":0.1579,"h":0.071,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-516.png"},"121:528":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":3303,"rotcue":false,"spots":[{"x":0.0408,"y":0.2477,"w":0.7505,"h":0.651,"to":"121:494","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0,"y":0.1735,"w":1,"h":0.5896,"to":"121:536","tt":"PUSH","dur":0.3,"dir":"LEFT","full":true},{"x":0.2113,"y":0.881,"w":0.4417,"h":0.1359,"to":"121:545","tt":"PUSH","dur":0.3,"dir":"TOP","full":false},{"x":0.7197,"y":0.139,"w":0.1579,"h":0.0609,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-528.png"},"121:536":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":3303,"rotcue":false,"spots":[{"x":0.4215,"y":0.8644,"w":0.3444,"h":0.1705,"to":"121:557","tt":"PUSH","dur":0.3,"dir":"TOP","full":false},{"x":0,"y":0.7805,"w":0.358,"h":0.084,"to":"121:528","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0.0669,"y":0.3512,"w":1,"h":0.3037,"to":"121:569","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.8033,"y":0.162,"w":0.1579,"h":0.0609,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-536.png"},"121:545":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2831,"rotcue":false,"spots":[{"x":0.5764,"y":0.7351,"w":0.6742,"h":0.182,"to":"121:557","tt":"SLIDE_OUT","dur":0.3,"dir":"LEFT","full":false},{"x":0,"y":0,"w":0.5866,"h":0.2637,"to":"121:528","tt":"PUSH","dur":0.3,"dir":"BOTTOM","full":false},{"x":0.3923,"y":0.4825,"w":0.5858,"h":0.1095,"to":"121:557","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.2364,"y":0.2172,"w":0.1579,"h":0.071,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-545.png"},"121:557":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2831,"rotcue":false,"spots":[{"x":0,"y":0.3797,"w":0.3399,"h":0.182,"to":"121:545","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0,"y":0.5238,"w":0.6886,"h":0.1106,"to":"121:545","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0.1192,"y":0,"w":0.4808,"h":0.2962,"to":"121:536","tt":"PUSH","dur":0.3,"dir":"BOTTOM","full":false},{"x":0.0962,"y":0.3013,"w":0.1579,"h":0.071,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-557.png"},"121:569":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":3303,"rotcue":false,"spots":[{"x":0.0408,"y":0.2092,"w":0.7505,"h":0.651,"to":"121:536","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0,"y":0.1735,"w":1,"h":0.5896,"to":"121:577","tt":"SLIDE_OUT","dur":0.3,"dir":"LEFT","full":true},{"x":0.2113,"y":0.881,"w":0.4417,"h":0.1359,"to":"121:586","tt":"SLIDE_OUT","dur":0.3,"dir":"TOP","full":false},{"x":0.8305,"y":0.1626,"w":0.1579,"h":0.0609,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-569.png"},"121:577":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2783,"rotcue":false,"spots":[{"x":0.4215,"y":0.839,"w":0.3444,"h":0.2024,"to":"121:598","tt":"PUSH","dur":0.3,"dir":"TOP","full":false},{"x":0,"y":0.7395,"w":0.358,"h":0.0997,"to":"121:569","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0.0669,"y":0.23,"w":1,"h":0.3604,"to":"121:906","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.5638,"y":0.019,"w":0.1579,"h":0.0722,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-577.png"},"121:586":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2831,"rotcue":false,"spots":[{"x":0.5764,"y":0.7351,"w":0.6742,"h":0.182,"to":"121:598","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0,"y":0,"w":0.5866,"h":0.2637,"to":"121:569","tt":"PUSH","dur":0.3,"dir":"BOTTOM","full":false},{"x":0.3923,"y":0.4825,"w":0.5858,"h":0.1095,"to":"121:598","tt":"PUSH","dur":0.3,"dir":"LEFT","full":false},{"x":0.7573,"y":0.1731,"w":0.1579,"h":0.071,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-586.png"},"121:598":{"name":"Put Thread into the needle hole","orient":"landscape","w":956,"h":2831,"rotcue":false,"spots":[{"x":0,"y":0.3797,"w":0.3399,"h":0.182,"to":"121:586","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0,"y":0.5238,"w":0.6886,"h":0.1106,"to":"121:586","tt":"PUSH","dur":0.3,"dir":"RIGHT","full":false},{"x":0.1192,"y":0,"w":0.4808,"h":0.2962,"to":"121:577","tt":"PUSH","dur":0.3,"dir":"BOTTOM","full":false},{"x":0.5805,"y":0.1102,"w":0.1579,"h":0.071,"to":"121:780","tt":"DISSOLVE","dur":1.25,"dir":null,"full":false}],"img":"121-598.png"},"111:238":{"name":"바느질 10","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"111:223","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"111-238.png"},"303:376":{"name":"바느질 13","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:385","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-376.png"},"303:385":{"name":"바느질 14","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:485","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-385.png"},"303:395":{"name":"바느질 15","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:376","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-395.png"},"303:510":{"name":"바느질 22","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:518","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-510.png"},"303:518":{"name":"바느질 23","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:891","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-518.png"},"303:527":{"name":"바느질 24","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:510","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-527.png"},"303:535":{"name":"바느질 25","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:544","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-535.png"},"303:544":{"name":"바느질 26","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:527","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-544.png"},"303:554":{"name":"바느질 27","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:535","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-554.png"},"303:2245":{"name":"바느질 37","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2253","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2245.png"},"303:2253":{"name":"바느질 38","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2314","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2253.png"},"303:2262":{"name":"바느질 39","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2245","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2262.png"},"303:2270":{"name":"바느질 40","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2278","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2270.png"},"303:2278":{"name":"바느질 41","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2454","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2278.png"},"303:2287":{"name":"바느질 42","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2270","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2287.png"},"303:2295":{"name":"바느질 43","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2304","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2295.png"},"303:2304":{"name":"바느질 44","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2287","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2304.png"},"303:2314":{"name":"바느질 45","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2295","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2314.png"},"303:2437":{"name":"바느질 46","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2445","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2437.png"},"303:2445":{"name":"바느질 47","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2506","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2445.png"},"303:2454":{"name":"바느질 48","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2437","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2454.png"},"303:2462":{"name":"바느질 49","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2470","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2462.png"},"303:2470":{"name":"바느질 50","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2583","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2470.png"},"303:2479":{"name":"바느질 51","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2462","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2479.png"},"303:2487":{"name":"바느질 52","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2496","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2487.png"},"303:2496":{"name":"바느질 53","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2479","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2496.png"},"303:2506":{"name":"바느질 54","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2487","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-2506.png"},"303:874":{"name":"바느질 28","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:882","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-874.png"},"303:882":{"name":"바느질 29","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:943","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-882.png"},"303:891":{"name":"바느질 30","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:874","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-891.png"},"303:899":{"name":"바느질 31","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:907","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-899.png"},"303:907":{"name":"바느질 32","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:2262","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-907.png"},"303:916":{"name":"바느질 33","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:899","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-916.png"},"303:924":{"name":"바느질 34","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:933","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-924.png"},"303:933":{"name":"바느질 35","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:916","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-933.png"},"303:943":{"name":"바느질 36","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"303:924","tt":"SMART_ANIMATE","dur":0.3,"dir":null,"full":true}],"img":"303-943.png"},"121:906":{"name":"Scissor Motion 14","orient":"landscape","w":393,"h":2587,"rotcue":false,"spots":[{"x":0,"y":0.0475,"w":0.9822,"h":1,"to":"123:182","tt":null,"dur":null,"dir":null,"full":true}],"img":"121-906.png"},"123:182":{"name":"Main","orient":"landscape","w":393,"h":852,"rotcue":false,"spots":[{"x":0,"y":0,"w":1,"h":1,"to":"108:159","tt":null,"dur":null,"dir":null,"full":true}],"img":"123-182.png"}}};
+const FRAMES = DATA.frames, START = DATA.start;
+const ASSET = 'p1-assets/';
 
-/* ---------------- engine ---------------- */
-const device = document.getElementById('device');
-const canvas = document.getElementById('canvas');
-const scaler = document.getElementById('scaler');
-let current = null;
-let orient  = 'portrait';
-let hist    = [];
-let busy    = false;
+const device   = document.getElementById('device');
+const viewport = document.getElementById('viewport');
+const scaler   = document.getElementById('scaler');
 
-function transitionFor(spot){
-  // map Figma transition -> css class + duration(ms)
-  let dur = spot && spot.dur ? Math.min(Math.max(spot.dur*1000, 250), 1200) : 400;
+let current=null, orient='portrait', hist=[], busy=false;
+
+/* ---- preloading ---- */
+const cache = {};
+function preload(id){
+  if(!id || cache[id] || !FRAMES[id]) return;
+  const im = new Image(); im.src = ASSET + FRAMES[id].img; cache[id] = im;
+}
+function preloadNeighbors(id){
+  (FRAMES[id].spots||[]).forEach(s => preload(s.to));
+}
+
+/* ---- transition mapping ---- */
+function trans(spot){
+  let dur = spot && spot.dur ? Math.min(Math.max(spot.dur*1000,260),1000) : 420;
   let cls = 'fade';
-  if(spot){
-    if(spot.tt === 'PUSH' || spot.tt === 'SLIDE_IN' || spot.tt === 'SLIDE_OUT' || spot.tt === 'MOVE_IN'){
-      const d = spot.dir || 'LEFT';
-      cls = d === 'RIGHT' ? 'slideR' : d === 'BOTTOM' || d === 'TOP' ? 'slideB' : 'slideL';
-    } else { cls = 'fade'; } // SMART_ANIMATE / DISSOLVE -> fade
+  if(spot && (spot.tt==='PUSH'||spot.tt==='SLIDE_IN'||spot.tt==='SLIDE_OUT'||spot.tt==='MOVE_IN')){
+    const d = spot.dir||'LEFT';
+    cls = 'sl ' + (d==='RIGHT'?'slR':d==='TOP'?'slT':d==='BOTTOM'?'slB':'slL');
   }
   return {cls, dur};
 }
 
+/* ---- build one screen ---- */
 function buildScreen(id){
   const f = FRAMES[id];
-  const s = document.createElement('div');
-  s.className = 'screen';
-  s.dataset.id = id;
+  const scn = document.createElement('div'); scn.className='scn'; scn.dataset.id=id;
+  const frame = document.createElement('div'); frame.className='frame';
+  const img = document.createElement('img');
+  img.src = ASSET + f.img; img.alt=''; img.draggable=false;
+  frame.appendChild(img);
 
-  // status bar (wireframe chrome)
-  const sb = document.createElement('div');
-  sb.className = 'statusbar';
-  sb.innerHTML = '<span>9:41</span><span>' + (f.orient==='landscape'?'▭':'▯') + '  ●●●</span>';
-  s.appendChild(sb);
-
-  // image placeholder (content hint)
-  const land = (f.orient === 'landscape');
-  const ph = document.createElement('div');
-  ph.className = 'ph';
-  if(land){ ph.style.cssText += 'left:6%;top:18%;width:46%;height:54%;'; }
-  else    { ph.style.cssText += 'left:22%;top:24%;width:56%;height:42%;'; }
-  ph.innerHTML = '<div class="ico">'+f.icon+'</div><div class="lab">'+f.disp+'</div>';
-  s.appendChild(ph);
-
-  // caption text(s)
-  const meaningful = f.texts.filter(t => t.s !== 'tap!');
-  meaningful.forEach(t => {
-    const c = document.createElement('div');
-    c.className = 'cap';
-    c.textContent = t.s;
-    let cx, cy, fs;
-    if(land){ cx = 0.74; cy = (meaningful.length>1? 0.30 : 0.46); fs = Math.min(t.fs||15, 16); c.style.width='44%'; }
-    else    { cx = (t.cx==null?0.5:t.cx); cy = (t.cy==null?0.16:t.cy); fs = Math.min(t.fs||15,18); }
-    c.style.left = (cx*100)+'%'; c.style.top = (cy*100)+'%';
-    c.style.fontSize = Math.max(fs*0.92, 11)+'px';
-    s.appendChild(c);
+  // sort hotspots: full/large first (under), small ones on top
+  const spots = (f.spots||[]).slice().sort((a,b)=> (b.w*b.h)-(a.w*a.h));
+  spots.forEach(s => {
+    const h = document.createElement('div'); h.className='hot';
+    h.style.left=(s.x*100)+'%'; h.style.top=(s.y*100)+'%';
+    h.style.width=(s.w*100)+'%'; h.style.height=(s.h*100)+'%';
+    if(s.full){ h.style.borderRadius='0'; }
+    h.addEventListener('click', e => { e.stopPropagation(); go(s.to, s); });
+    frame.appendChild(h);
   });
-
-  // split spots: primary (full / tap-anywhere) vs branches
-  const full = f.spots.filter(sp => sp.full || f.spots.length===1);
-  const branch = f.spots.filter(sp => !(sp.full || f.spots.length===1));
-  const primary = full[0] || (f.spots.length===1 ? f.spots[0] : null);
-
-  if(primary){
-    const tl = document.createElement('div');
-    tl.className = 'taplayer';
-    tl.addEventListener('click', () => go(primary.to, primary));
-    s.appendChild(tl);
-
-    if(f.rotcue){
-      const rc = document.createElement('div');
-      rc.className = 'rotcue';
-      rc.innerHTML = '<div class="ring"><span>↻ tap</span></div><div class="msg">기기를 가로로 돌립니다</div>';
-      s.appendChild(rc);
-    } else {
-      const hint = document.createElement('div');
-      hint.className = 'taphint';
-      let hx = (primary.cx!=null && !primary.full)? primary.cx : 0.5;
-      let hy = (primary.cy!=null && !primary.full)? primary.cy : (land?0.80:0.82);
-      hint.style.left = (hx*100)+'%'; hint.style.top = (hy*100)+'%';
-      hint.innerHTML = '<div class="dot">tap</div>';
-      s.appendChild(hint);
-    }
-  }
-
-  if(branch.length){
-    const wrap = document.createElement('div');
-    wrap.className = 'branches';
-    branch.forEach(sp => {
-      const b = document.createElement('button');
-      b.className = 'branch';
-      b.innerHTML = '<span class="arr">→</span>' + sp.label;
-      b.addEventListener('click', (e)=>{ e.stopPropagation(); go(sp.to, sp); });
-      wrap.appendChild(b);
-    });
-    s.appendChild(wrap);
-  }
-  return s;
+  scn.appendChild(frame);
+  return scn;
 }
 
-function setOrientation(newOri){
-  if(newOri === orient) return;
-  orient = newOri;
-  device.classList.toggle('landscape', orient === 'landscape');
+/* ---- orientation / sizing ---- */
+function applyOrient(o){
+  orient = o;
+  device.classList.toggle('landscape', o==='landscape');
+  const W=getComputedStyle(document.documentElement).getPropertyValue('--scn-w').trim();
+  const H=getComputedStyle(document.documentElement).getPropertyValue('--scn-h').trim();
+  const w = o==='landscape'? H : W, h = o==='landscape'? W : H;
+  document.documentElement.style.setProperty('--vw', w+'px');
+  document.documentElement.style.setProperty('--vh', h+'px');
   fitScale();
 }
-
 function fitScale(){
-  // scale device down if landscape (wide) overflows the stage
-  const stage = document.getElementById('stage');
-  const availW = stage.clientWidth - 60;
-  const availH = stage.clientHeight - 60;
-  const devW = device.offsetWidth, devH = device.offsetHeight;
-  const w = orient==='landscape'? devH : devW;   // rotated footprint
-  const h = orient==='landscape'? devW : devH;
-  const sc = Math.min(1, availW/w, availH/h);
-  scaler.style.transform = 'scale(' + sc.toFixed(3) + ')';
+  if(matchMedia('(max-width:760px),(pointer:coarse)').matches){ scaler.style.transform='none'; return; }
+  const aw=innerWidth-70, ah=innerHeight-70;
+  const dw=device.offsetWidth||380, dh=device.offsetHeight||880;
+  const sc=Math.min(aw/dw, ah/dh, 1.55);
+  scaler.style.transform='scale('+sc.toFixed(3)+')';
 }
 
-function go(id, spot){
-  if(busy || !FRAMES[id]) return;
-  if(current !== null) hist.push(current);
-  navigate(id, spot, false);
-}
+/* ---- navigation ---- */
+function go(id, spot){ if(busy||!FRAMES[id]) return; if(current!==null) hist.push(current); navigate(id,spot,false); }
 
 function navigate(id, spot, instant){
-  const f = FRAMES[id];
+  const f=FRAMES[id];
+  const oriChange = f.orient!==orient;
   const incoming = buildScreen(id);
-  const {cls, dur} = transitionFor(spot);
-  const oriChange = (f.orient !== orient);
-
-  const outgoing = canvas.querySelector('.screen');
 
   if(instant){
-    canvas.innerHTML = '';
-    canvas.appendChild(incoming);
-    setOrientation(f.orient);
-    finish(id); return;
+    viewport.innerHTML=''; applyOrient(f.orient); viewport.appendChild(incoming); finish(id); return;
   }
+  busy=true;
+  const {cls,dur}=trans(spot);
+  const outgoing=viewport.querySelector('.scn');
 
-  busy = true;
-  // if orientation changes, rotate device first, then swap screens
-  const startSwap = () => {
-    incoming.style.setProperty('--tdur', dur+'ms');
-    incoming.classList.add('enter', cls);
-    canvas.appendChild(incoming);
-    void incoming.offsetWidth;                  // reflow
-    incoming.classList.remove('enter');
-    incoming.classList.add('run');
-    if(outgoing){
-      outgoing.style.setProperty('--tdur', dur+'ms');
-      outgoing.classList.add('leave', cls);
-    }
-    setTimeout(() => {
-      if(outgoing) outgoing.remove();
-      incoming.classList.remove('run', cls);
-      busy = false;
-      finish(id);
-    }, dur + 30);
+  const doSwap=()=>{
+    incoming.style.setProperty('--tdur',dur+'ms');
+    incoming.classList.add('enter', ...cls.split(' '));
+    viewport.appendChild(incoming);
+    void incoming.offsetWidth;
+    incoming.classList.remove('enter'); incoming.classList.add('run');
+    if(outgoing){ outgoing.style.setProperty('--tdur',dur+'ms'); outgoing.classList.add('leave', ...cls.split(' ')); }
+    setTimeout(()=>{ if(outgoing) outgoing.remove();
+      incoming.classList.remove('run', ...cls.split(' ')); busy=false; finish(id); }, dur+40);
   };
 
   if(oriChange){
-    setOrientation(f.orient);                   // triggers --rotMs rotation
-    setTimeout(startSwap, 480);                 // let the rotation read before content swap
-  } else {
-    startSwap();
-  }
+    applyOrient(f.orient);
+    const spinCls = f.orient==='landscape' ? 'spin-l' : 'spin-p';
+    device.classList.remove('spin-l','spin-p'); void device.offsetWidth;
+    device.classList.add(spinCls);
+    setTimeout(()=>device.classList.remove(spinCls), 860);
+    setTimeout(doSwap, 300);
+  } else { doSwap(); }
 }
 
-function finish(id){
-  current = id;
-  const f = FRAMES[id];
-  document.getElementById('nowname').textContent = f.disp;
-  document.getElementById('oritag').textContent = f.orient;
-  renderTrail();
-  try{ history.replaceState(null,'', '#f=' + id); }catch(e){}
-}
+function finish(id){ current=id; preloadNeighbors(id); try{history.replaceState(null,'','#f='+id);}catch(e){} }
 
-function renderTrail(){
-  const t = document.getElementById('trail');
-  const path = hist.slice(-6).map(h => FRAMES[h].disp);
-  t.innerHTML = '<b>경로</b><br>' + (path.length? path.join(' → ') + ' → ' : '') +
-                '<b>' + (current?FRAMES[current].disp:'') + '</b>';
-}
+/* ---- controls ---- */
+function openPanel(v){ document.getElementById('panel').classList.toggle('open',v);
+  document.getElementById('scrim').classList.toggle('on',v); }
+document.getElementById('menuBtn').onclick=()=>openPanel(!document.getElementById('panel').classList.contains('open'));
+document.getElementById('scrim').onclick=()=>openPanel(false);
+function goBack(){ if(busy||!hist.length) return; navigate(hist.pop(), null, false); }
+document.getElementById('backBtn').onclick=goBack;
+document.getElementById('pBack').onclick=goBack;
+function goHome(){ if(busy) return; hist=[]; navigate(START,null,false); openPanel(false); }
+document.getElementById('pHome').onclick=goHome;
+document.getElementById('hintChk').onchange=e=>document.body.classList.toggle('hints',e.target.checked);
+document.getElementById('pPortfolio').onclick=()=>location.href='../index.html';
+addEventListener('resize', fitScale);
+addEventListener('keydown', e=>{ if(e.key==='Backspace'||e.key==='ArrowLeft'){e.preventDefault();goBack();} });
 
-document.getElementById('backBtn').addEventListener('click', () => {
-  if(busy || !hist.length) return;
-  const prev = hist.pop();
-  navigate(prev, null, false);
-});
-document.getElementById('homeBtn').addEventListener('click', () => {
-  if(busy) return; hist = []; navigate(START, null, false);
-});
-window.addEventListener('resize', fitScale);
-
-// init (support #f=ID deep-link for testing)
-(function init(){
-  let startId = START;
-  const m = location.hash.match(/f=([0-9:]+)/);
-  if(m && FRAMES[m[1]]) startId = m[1];
-  // set orientation instantly to the start frame's orientation
-  orient = FRAMES[startId].orient;
-  device.classList.toggle('landscape', orient==='landscape');
-  navigate(startId, null, true);
-  fitScale();
+/* ---- init (supports #f=ID deep-link) ---- */
+(function(){
+  let id=START; const m=location.hash.match(/f=([0-9:]+)/); if(m&&FRAMES[m[1]]) id=m[1];
+  if(location.hash.includes('hints')) document.body.classList.add('hints');
+  applyOrient(FRAMES[id].orient);
+  navigate(id,null,true);
 })();
 </script>
 </body>
