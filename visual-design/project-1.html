@@ -115,11 +115,13 @@ function preloadNeighbors(id){ (FRAMES[id].spots||[]).forEach(s=>preload(s.to));
 function easeCss(e){ return {LINEAR:'linear',EASE_IN:'cubic-bezier(.42,0,1,1)',EASE_OUT:'cubic-bezier(0,0,.58,1)',
   EASE_IN_AND_OUT:'cubic-bezier(.42,0,.58,1)',GENTLE:'cubic-bezier(.42,0,.58,1)',
   BOUNCY:'cubic-bezier(.34,1.56,.64,1)',SLOW:'cubic-bezier(.33,0,.15,1)'}[e]||'ease'; }
-function trans(spot){
+function trans(spot, rot){
   let dur=spot&&spot.dur?Math.min(Math.max(spot.dur*1000,200),1400):500;
   let cls='fade', eas=easeCss(spot&&spot.eas);
   if(spot&&(spot.tt==='PUSH'||spot.tt==='SLIDE_IN'||spot.tt==='SLIDE_OUT'||spot.tt==='MOVE_IN')){
-    const d=spot.dir||'LEFT'; cls='sl '+(d==='RIGHT'?'slR':d==='TOP'?'slT':d==='BOTTOM'?'slB':'slL');
+    const d=spot.dir||'LEFT'; let b=(d==='RIGHT'?'slR':d==='TOP'?'slT':d==='BOTTOM'?'slB':'slL');
+    if(rot) b={slL:'slT',slR:'slB',slT:'slR',slB:'slL'}[b];   // device rotated -90deg: keep Figma's visual slide direction
+    cls='sl '+b;
   }
   return {cls,dur,eas};
 }
@@ -136,8 +138,9 @@ function buildScreen(id){
     const el=document.createElement('div'); el.className='comp';
     el.style.left=(c.x*100)+'%'; el.style.top=(c.y*100)+'%';
     el.style.width=(c.w*100)+'%'; el.style.height=(c.h*100)+'%';
-    el.style.setProperty('--cf', Math.min((c.iv||.9)*1000,380)+'ms');
-    el.dataset.iv=c.iv||0.9;
+    const effIv=Math.max((c.iv||.9)*3, 1.2);                 // slower, gentler blink
+    el.style.setProperty('--cf', Math.round(Math.min(effIv*0.45,0.7)*1000)+'ms');
+    el.dataset.iv=effIv;
     c.vars.forEach(v=>{ const im=document.createElement('img'); im.src=ASSET+v; im.alt=''; el.appendChild(im); });
     frm.appendChild(el);
   });
@@ -156,7 +159,7 @@ function startComps(scn){
   scn.querySelectorAll('.comp').forEach(c=>{
     const ls=[...c.querySelectorAll('img')]; if(ls.length<2){ if(ls[0])ls[0].style.opacity=1; return; }
     let i=0; ls.forEach((l,k)=>l.style.opacity=k?0:1);
-    const iv=Math.max((parseFloat(c.dataset.iv)||.9),0.22)*1000;
+    const iv=Math.max((parseFloat(c.dataset.iv)||1.2),0.6)*1000;
     scn._timers.push(setInterval(()=>{ ls[i].style.opacity=0; i=(i+1)%ls.length; ls[i].style.opacity=1; }, iv));
   });
 }
@@ -178,7 +181,8 @@ function navigate(id,spot,instant){
   const f=FRAMES[id]; const oriChange=f.orient!==orient;
   const incoming=buildScreen(id);
   if(instant){ viewport.innerHTML=''; applyOrient(f.orient); viewport.appendChild(incoming); startComps(incoming); finish(id); return; }
-  busy=true; const {cls,dur,eas}=trans(spot); const outgoing=viewport.querySelector('.scn');
+  const desk=!matchMedia('(max-width:760px),(pointer:coarse)').matches;
+  busy=true; const {cls,dur,eas}=trans(spot, f.orient==='landscape'&&desk); const outgoing=viewport.querySelector('.scn');
   const doSwap=()=>{
     incoming.style.setProperty('--tdur',dur+'ms'); incoming.style.setProperty('--teas',eas);
     incoming.classList.add('enter',...cls.split(' ')); viewport.appendChild(incoming); startComps(incoming);
