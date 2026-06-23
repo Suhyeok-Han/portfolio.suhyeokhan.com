@@ -139,21 +139,23 @@ function trans(spot, rot){
 const bgCache={};
 function sampleBg(img, c, key){
   if(key in bgCache) return bgCache[key];
-  let res=null;
+  let res='rgb(255,255,255)';                    // always return a colour -> always cover
   try{
-    const W=180, H=Math.max(1,Math.round(180*img.naturalHeight/img.naturalWidth));
+    const W=200, H=Math.max(1,Math.round(200*img.naturalHeight/img.naturalWidth));
     const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
-    const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,W,H);
-    const pts=[[c.x-0.025,c.y+c.h/2],[c.x+c.w+0.025,c.y+c.h/2],[c.x+c.w/2,c.y-0.02],[c.x+c.w/2,c.y+c.h+0.02]];
-    const cols=[];
+    const ctx=cv.getContext('2d',{willReadFrequently:true}); ctx.drawImage(img,0,0,W,H);
+    const m=0.03;
+    const pts=[[c.x-m,c.y],[c.x-m,c.y+c.h],[c.x+c.w+m,c.y],[c.x+c.w+m,c.y+c.h],
+               [c.x+c.w/2,c.y-m],[c.x+c.w/2,c.y+c.h+m],
+               [c.x<0.5?0.01:0.99, c.y<0.5?0.01:0.99]];   // perimeter + nearest corner
+    const ch=[[],[],[]];
     for(const [px,py] of pts){
       const X=Math.max(0,Math.min(W-1,Math.round(px*W))), Y=Math.max(0,Math.min(H-1,Math.round(py*H)));
-      const d=ctx.getImageData(X,Y,1,1).data; cols.push([d[0],d[1],d[2]]);
+      const d=ctx.getImageData(X,Y,1,1).data; ch[0].push(d[0]); ch[1].push(d[1]); ch[2].push(d[2]);
     }
-    const avg=[0,1,2].map(i=>cols.reduce((s,c)=>s+c[i],0)/cols.length);
-    const varc=cols.reduce((s,c)=>s+Math.abs(c[0]-avg[0])+Math.abs(c[1]-avg[1])+Math.abs(c[2]-avg[2]),0)/cols.length;
-    res = varc>55 ? null : 'rgb('+avg.map(Math.round).join(',')+')';   // skip if not on uniform bg
-  }catch(e){ res=null; }
+    const med=a=>{ a.sort((x,y)=>x-y); return a[Math.floor(a.length/2)]; };   // median = robust to outliers (needle/text)
+    res='rgb('+med(ch[0])+','+med(ch[1])+','+med(ch[2])+')';
+  }catch(e){}
   bgCache[key]=res; return res;
 }
 
@@ -167,8 +169,8 @@ function buildScreen(id){
   if(f.w>500){ frm.style.width=Math.round((viewport.clientWidth||404)*1.8)+'px'; }  // enlarge wide typo frames -> free 2D pan
   scn.addEventListener('scroll',()=>{ fx.style.transform='translate('+(-scn.scrollLeft)+'px,'+(-scn.scrollTop)+'px)'; });
   const addCovers=()=>{ (f.comps||[]).forEach(c=>{
-    const col=sampleBg(img,c,f.img+'@'+c.x+','+c.y); if(!col) return;
-    const cv=document.createElement('div'); cv.className='cover'; const p=0.015;
+    const col=sampleBg(img,c,f.img+'@'+c.x+','+c.y);
+    const cv=document.createElement('div'); cv.className='cover'; const p=0.022;
     cv.style.left=((c.x-p)*100)+'%'; cv.style.top=((c.y-p)*100)+'%';
     cv.style.width=((c.w+2*p)*100)+'%'; cv.style.height=((c.h+2*p)*100)+'%'; cv.style.background=col;
     frm.appendChild(cv);
