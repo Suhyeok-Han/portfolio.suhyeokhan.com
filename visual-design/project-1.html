@@ -35,7 +35,7 @@ body{background:var(--bg); overflow:hidden; -webkit-tap-highlight-color:transpar
   background:#000; border-radius:40px; overflow:hidden;}
 
 /* screens */
-.scn{position:absolute; inset:0; overflow-y:auto; overflow-x:hidden; background:#000;
+.scn{position:absolute; inset:0; overflow:auto; background:#000;          /* free 2D scroll when frame > screen */
   -webkit-overflow-scrolling:touch; scrollbar-width:none;}
 .scn::-webkit-scrollbar{display:none;}
 .frm{position:relative; width:100%;}
@@ -164,6 +164,8 @@ function buildScreen(id){
   const frm=document.createElement('div'); frm.className='frm';
   const img=document.createElement('img'); img.className='base'; img.src=ASSET+f.img; img.alt=''; img.draggable=false;
   frm.appendChild(img);
+  if(f.w>500){ frm.style.width=Math.round((viewport.clientWidth||404)*1.8)+'px'; }  // enlarge wide typo frames -> free 2D pan
+  scn.addEventListener('scroll',()=>{ fx.style.transform='translate('+(-scn.scrollLeft)+'px,'+(-scn.scrollTop)+'px)'; });
   const addCovers=()=>{ (f.comps||[]).forEach(c=>{
     const col=sampleBg(img,c,f.img+'@'+c.x+','+c.y); if(!col) return;
     const cv=document.createElement('div'); cv.className='cover'; const p=0.015;
@@ -186,10 +188,11 @@ function buildScreen(id){
 function cueKey(c){ return c.vars.slice().sort().join('|'); }
 function updateCues(id, dur){
   const f=FRAMES[id]; const present={};
-  const vpW=viewport.clientWidth||404, dispH=vpW*(f.h/f.w);
+  fx.style.transform='translate(0,0)';                       // new screen starts unscrolled
+  const vpW=viewport.clientWidth||404, dispW=(f.w>500)?Math.round(vpW*1.8):vpW, dispH=dispW*(f.h/f.w);
   (f.comps||[]).forEach(c=>{
     const key=cueKey(c); present[key]=1;
-    const L=c.x*vpW, T=c.y*dispH, W=c.w*vpW, H=c.h*dispH;
+    const L=c.x*dispW, T=c.y*dispH, W=c.w*dispW, H=c.h*dispH;
     let cue=fx.querySelector('.cue[data-k="'+key+'"]');
     if(!cue){
       cue=document.createElement('div'); cue.className='cue'; cue.dataset.k=key;
