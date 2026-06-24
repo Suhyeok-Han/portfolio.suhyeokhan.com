@@ -175,7 +175,7 @@ function buildScreen(id){
     cv.style.width=((c.w+2*p)*100)+'%'; cv.style.height=((c.h+2*p)*100)+'%'; cv.style.background=col;
     frm.appendChild(cv);
   }); };
-  if(img.complete && img.naturalWidth) addCovers(); else img.addEventListener('load',addCovers,{once:true});
+  /* baked-cue cover disabled — it produced visible solid boxes; pending layered redesign */
   (f.spots||[]).slice().sort((a,b)=>(b.w*b.h)-(a.w*a.h)).forEach(s=>{
     const h=document.createElement('div'); h.className='hot';
     h.style.left=(s.x*100)+'%'; h.style.top=(s.y*100)+'%'; h.style.width=(s.w*100)+'%'; h.style.height=(s.h*100)+'%';
@@ -189,6 +189,8 @@ function buildScreen(id){
 /* persistent cue layer: create / glide / remove blinking cues */
 function cueKey(c){ return c.vars.slice().sort().join('|'); }
 function updateCues(id, dur){
+  [...fx.children].forEach(c=>{ stopCue(c); c.remove(); });   // cue overlay disabled (interim) — pending layered redesign
+  if(true) return;
   const f=FRAMES[id]; const present={};
   fx.style.transform='translate(0,0)';                       // new screen starts unscrolled
   const vpW=viewport.clientWidth||404, dispW=(f.w>500)?Math.round(vpW*1.8):vpW, dispH=dispW*(f.h/f.w);
